@@ -1,13 +1,27 @@
 #!/usr/bin/env tsx
 /**
  * PostToolUse hook — ファイル変更・Bash 実行を work-log.jsonl に記録する
+ *
+ * ログローテーション: 500KB 超で .jsonl.1 → .jsonl.2 にシフト（2世代保持）
  */
 
-import { appendFileSync } from "fs";
+import { appendFileSync, existsSync, renameSync, statSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 
 const LOG_TOOLS = new Set(["Write", "Edit", "NotebookEdit", "Bash"]);
+const LOG_PATH = join(homedir(), ".claude", "work-log.jsonl");
+const LOG_MAX_BYTES = 500 * 1024; // 500KB
+const LOG_BACKUPS = 2;
+
+function rotateLog(): void {
+  if (!existsSync(LOG_PATH) || statSync(LOG_PATH).size < LOG_MAX_BYTES) return;
+  for (let i = LOG_BACKUPS; i >= 1; i--) {
+    const src = i === 1 ? LOG_PATH : `${LOG_PATH}.${i - 1}`;
+    const dst = `${LOG_PATH}.${i}`;
+    if (existsSync(src)) renameSync(src, dst);
+  }
+}
 
 async function main(): Promise<void> {
   const chunks: Buffer[] = [];
@@ -35,9 +49,9 @@ async function main(): Promise<void> {
     entry.file = data.tool_input?.file_path ?? "";
   }
 
-  const logPath = join(homedir(), ".claude", "work-log.jsonl");
   try {
-    appendFileSync(logPath, JSON.stringify(entry) + "\n", "utf-8");
+    rotateLog();
+    appendFileSync(LOG_PATH, JSON.stringify(entry) + "\n", "utf-8");
   } catch {
     // ロギング失敗はサイレントに無視
   }

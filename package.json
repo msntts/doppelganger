@@ -1,5 +1,8 @@
 {
   "name": "doppelganger",
   "private": true,
-  "dependencies": {}
+  "devDependencies": {
+    "tsx": "^4.19.3",
+    "@types/node": "^22.0.0"
+  }
 }
