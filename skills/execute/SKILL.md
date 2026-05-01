@@ -33,17 +33,17 @@ PLAN.md はセッションをまたいで即再開できるための外部記憶
 
 ## Brief システム
 
-複雑なタスクは `.claude/briefs/` 配下に詳細指示書（brief）を作成し、PLAN.md からリンクする。
+複雑なタスクは `docs/briefs/` 配下に詳細指示書（brief）を作成し、PLAN.md からリンクする。
 
 ### インラインか brief か
 
 | 条件 | 対応 |
 |------|------|
 | サブ手順 ≤ 3、かつ変更ファイル ≤ 2 | PLAN.md にインライン記述 |
-| サブ手順 ≥ 4、または変更ファイル ≥ 3 | `.claude/briefs/` に分離 |
+| サブ手順 ≥ 4、または変更ファイル ≥ 3 | `docs/briefs/` に分離 |
 | 前提条件・制約が複雑 | 分離必須 |
 
-### Brief ファイルの形式（`.claude/briefs/step-XX-name.md`）
+### Brief ファイルの形式（`docs/briefs/step-XX-name.md`）
 
 ```markdown
 # Step XX: {タスク名}
@@ -138,7 +138,7 @@ advisor はコードを書かず判断のみ返す。返ってきた設計を PL
 ## Phase 1: {フェーズ名}
 
 - [ ] 1-1. {タスク}
-- [ ] 1-2. {タスク} → [詳細](.claude/briefs/step-1-2-name.md)
+- [ ] 1-2. {タスク} → [詳細](docs/briefs/step-1-2-name.md)
 
 ## Phase 2: {フェーズ名} [REVIEW]
 
