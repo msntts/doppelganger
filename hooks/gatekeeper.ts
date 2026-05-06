@@ -263,6 +263,22 @@ function buildSystemPrompt(cwd?: string): string {
   );
 }
 
+const JUDGMENT_SCHEMA = JSON.stringify({
+  type: "object",
+  properties: {
+    interpretation: { type: "string" },
+    decision: { type: "string", enum: ["approve", "ask", "block"] },
+    learn: { type: "boolean" },
+    reason: { type: "string" },
+  },
+  required: ["decision"],
+});
+
+interface ClaudeJsonOutput {
+  result: string;
+  is_error?: boolean;
+}
+
 function extractJson(text: string): Judgment {
   const cleaned = text.trim().replace(/^```(?:json)?\s*/m, "").replace(/\s*```$/m, "").trim();
   try {
@@ -280,15 +296,24 @@ function judge(toolName: string, toolInput: Record<string, unknown>, cwd?: strin
 
   const result = spawnSync(
     "claude",
-    ["-p", "--no-session-persistence", "--model", "claude-haiku-4-5-20251001",
-     "--system-prompt", systemPrompt, userMessage],
+    [
+      "-p",
+      "--no-session-persistence",
+      "--model", "claude-haiku-4-5-20251001",
+      "--output-format", "json",
+      "--json-schema", JUDGMENT_SCHEMA,
+      "--system-prompt", systemPrompt,
+      userMessage,
+    ],
     { encoding: "utf-8", timeout: 30000 }
   );
 
   if (result.error) throw new Error(`subprocess error: ${result.error.message}`);
   if (result.status !== 0) throw new Error(`claude exited with ${result.status}: ${result.stderr}`);
 
-  return extractJson(result.stdout.trim());
+  const envelope = JSON.parse(result.stdout.trim()) as ClaudeJsonOutput;
+  if (envelope.is_error) throw new Error(`claude returned error: ${envelope.result}`);
+  return extractJson(envelope.result);
 }
 
 function allow(reason: string): void {
