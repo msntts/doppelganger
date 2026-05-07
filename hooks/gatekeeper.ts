@@ -206,18 +206,23 @@ function isDenied(toolName: string, toolInput: Record<string, unknown>, patterns
   return null;
 }
 
+// 任意の入力で副作用を起こせるツールは learn 対象から永続的に除外する。
+// LLM が learn:true を返してしまった場合の最後のガード。
+const NEVER_READONLY: ReadonlySet<string> = new Set(["Bash", "Edit", "Write", "NotebookEdit"]);
+
 function loadReadonlyTools(cwd?: string): Set<string> {
   const claudeDir = projectClaudeDir(cwd);
   if (!claudeDir) return new Set();
   try {
     const data = JSON.parse(readFileSync(join(claudeDir, "readonly_tools.json"), "utf-8")) as { tools: string[] };
-    return new Set(data.tools ?? []);
+    return new Set((data.tools ?? []).filter((t) => !NEVER_READONLY.has(t)));
   } catch {
     return new Set();
   }
 }
 
 function saveReadonlyTool(toolName: string, cwd?: string): void {
+  if (NEVER_READONLY.has(toolName)) return;
   const claudeDir = projectClaudeDir(cwd);
   if (!claudeDir) return;
   try {
