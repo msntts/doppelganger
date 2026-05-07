@@ -208,7 +208,14 @@ function isDenied(toolName: string, toolInput: Record<string, unknown>, patterns
 
 // 任意の入力で副作用を起こせるツールは learn 対象から永続的に除外する。
 // LLM が learn:true を返してしまった場合の最後のガード。
-const NEVER_READONLY: ReadonlySet<string> = new Set(["Bash", "Edit", "Write", "NotebookEdit"]);
+const NEVER_READONLY: ReadonlySet<string> = new Set([
+  "Bash",
+  "Edit",
+  "Write",
+  "NotebookEdit",
+  "Agent",
+  "Skill",
+]);
 
 function loadReadonlyTools(cwd?: string): Set<string> {
   const claudeDir = projectClaudeDir(cwd);
