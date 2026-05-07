@@ -1,7 +1,6 @@
 ---
 name: execute
-description: PLAN.md を介して作業状態を保存しながらタスクを進めるスキル。Git 管理下のテキスト成果物（コード・設定・ドキュメント等）を対象とする構造化実行ループ。
-TRIGGER when: user asks to add features, fix bugs, refactor, or modify code in a programming project
+description: PLAN.md を介してタスクを構造化実行する。「機能追加して」「バグ直して」「リファクタして」「実装して」「タスクを進めて」「PLAN を更新」「続きやって」等で使う。Git 管理下のコード・設定・ドキュメント変更を対象に、1タスク=1コミット粒度で進める。
 user-invocable: true
 allowed-tools:
   - Read

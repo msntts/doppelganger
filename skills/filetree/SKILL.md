@@ -1,6 +1,6 @@
 ---
 name: filetree
-description: 右ペインで broot ファイルツリーを開く・閉じる（Mac: tmux、Windows: Windows Terminal）。ファイルパスを渡すとそのファイルにフォーカスした状態で開く
+description: ファイルツリーを右ペインで開閉する。「ツリー開いて」「ファイル一覧見たい」「broot 開いて」「ツリー閉じて」等で使う。Mac は tmux、Windows は Windows Terminal を使用。引数にファイル/ディレクトリパスを渡すとそこにフォーカスして開く。
 user-invocable: true
 ---
 

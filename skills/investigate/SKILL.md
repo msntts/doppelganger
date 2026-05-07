@@ -1,6 +1,6 @@
 ---
 name: investigate
-description: 原因不明の不具合をデバッグブランチで調査するスキル。ログを仕込んで実行し、原因を特定して /execute に引き継ぐ。コードの修正は行わない。
+description: 原因不明の不具合を debug ブランチで調査する。「なんか動かない」「原因がわからない」「動作がおかしい」「ログ仕込んで」「デバッグして調査」「なぜこれが起きる」等で使う。ログを仕込んで実行・原因特定後 /execute に引き継ぐ。修正自体は行わない。
 user-invocable: true
 allowed-tools:
   - Read

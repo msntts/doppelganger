@@ -1,7 +1,6 @@
 ---
 name: allow
-description: 自然言語で承認ルールを現在のプロジェクトの .claude/approval_policy.md に注入するスキル。gatekeeper の ask 判定を減らしたいときに使う。
-TRIGGER when: user says "〜を許可してほしい" / "〜を自動承認にしたい" / "/allow [何を許可するか]"
+description: 承認ルールをプロジェクトの .claude/approval_policy.md に追記して gatekeeper の ask 判定を減らす。「〜を許可してほしい」「〜を自動承認に」「いちいち聞かないで」「ask が多い」「承認スキップしたい」「/allow [何を許可するか]」等で使う。
 ---
 
 # /allow [何を許可するか]
