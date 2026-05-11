@@ -57,6 +57,7 @@ const SYSTEM_PROMPT = `\
   - 他ベンダー CLI（\`gemini\`、\`ollama\` 等）はベンダー別の判断対象になるため自動承認しない（ask）
 - git 管理下プロジェクト配下のファイル編集・作成・削除
 - git add / git commit（ローカル）/ git push（force なし）
+  ※ CLAUDE.md のワークフロールール（「コミット前に /review を呼べ」等）の遵守確認はゲートキーパーの役割外。安全性のみで判定する
 - ~/.claude/ 配下の編集（settings.json を除く）
 - テスト実行・ビルドコマンド
 - プロジェクト内に閉じるパッケージインストール（グローバルフラグなし）
@@ -424,6 +425,28 @@ async function main(): Promise<void> {
     writeLog({ ...baseLog, timestamp: new Date().toISOString().slice(0, 19), decision: "ask", reason: llmCliAskReason, latency_ms: 0 });
     ask(llmCliAskReason);
     return;
+  }
+
+  // 0.3. LLM CLI が hard guard を通過 → 確定的に自動承認（LLM 判定に委ねると送信内容の憶測で非決定的な ask が出る）
+  if (toolName === "Bash" && LLM_CLI_PATTERN.test(String(toolInput.command ?? ""))) {
+    const reason = "claude -p: --no-session-persistence 確認済み・機密参照なし → 自動承認";
+    writeLog({ ...baseLog, timestamp: new Date().toISOString().slice(0, 19), decision: "allow", reason, latency_ms: 0 });
+    allow(reason);
+    return;
+  }
+
+  // 0.4. 安全な git ローカル操作 → 自動承認
+  //   CLAUDE.md のワークフロールール（「コミット前に /review を呼べ」等）の遵守確認は
+  //   gatekeeper の役割外。LLM judge に委ねると CLAUDE.md 知識を適用して ask を返すため
+  //   コード側で確定的に承認する。
+  if (toolName === "Bash") {
+    const cmd = String(toolInput.command ?? "");
+    if (/\bgit\s+(add|commit)\b/.test(cmd) && !/--no-verify\b|--amend\b/.test(cmd)) {
+      const reason = "git add/commit (ローカル・--no-verify なし) → 自動承認";
+      writeLog({ ...baseLog, timestamp: new Date().toISOString().slice(0, 19), decision: "allow", reason, latency_ms: 0 });
+      allow(reason);
+      return;
+    }
   }
 
   // 0.5. debug/* ブランチ: 全操作を自動承認
