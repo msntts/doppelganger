@@ -41,11 +41,11 @@ gatekeeper の LLM 役割を「category を返すだけ」に縮小し、allow/a
 ## Phase 2: per-project 設定移行
 
 - [x] 2-1. rpa: `approval_policy.md` を分類ヒントスタイルに書き直す（category_overrides.json は不要）
-- [ ] 2-2. kintai-kanri: `approval_policy.md` を分類ヒントスタイルに書き直す + `category_overrides.json` 新設（`external_write → allow`）
+- [x] 2-2. kintai-kanri: `approval_policy.md` を分類ヒントスタイルに書き直す + `allow_patterns.json` 新設（`clasp push/deploy` を Bash パターン単位で allow）
 
 ## Phase 3: ドキュメント更新
 
-- [ ] 3-1. `hooks/approval_policy.md` を新アーキテクチャ説明に全面更新
+- [x] 3-1. `hooks/approval_policy.md` を新アーキテクチャ説明に全面更新
 
 ---
 

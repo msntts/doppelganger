@@ -558,7 +558,10 @@ async function main(): Promise<void> {
   if (toolName === "Bash") {
     const cmd = String(toolInput.command ?? "");
     const bashPatterns = loadBashAllowPatterns(data.cwd);
-    const matchedPattern = bashPatterns.find((p) => cmd.includes(p));
+    const matchedPattern = bashPatterns.find((p) => {
+      const escaped = p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      return new RegExp(`(^|[;&|\\s])${escaped}(\\s|$)`).test(cmd);
+    });
     if (matchedPattern) {
       const reason = `allow_patterns match: "${matchedPattern}" → 自動承認`;
       writeLog({
