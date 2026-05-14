@@ -27,15 +27,9 @@ git diff HEAD
 
 ---
 
-> **差分の渡し方**: `claude` には **stdin でパイプ** する（`"$(git diff HEAD)"` のような位置引数経由は ARG_MAX を超えたり、claude CLI がプロンプト二重渡しで `Unhandled node type: string` 等を返すことがあるため避ける）。
+### 2. Security レビュー
 
-### 2. Security エージェント
-
-以下を Bash ツールで実行する（差分を stdin で渡す）：
-
-```bash
-git diff HEAD | claude -p --no-session-persistence \
-  --system-prompt "あなたはセキュリティの専門家です。コード変更を以下の観点でレビューしてください。
+収集した差分を対象に、以下の観点で分析する：
 
 - 認証・認可の不備
 - 入力検証・サニタイズの欠如
@@ -43,21 +37,14 @@ git diff HEAD | claude -p --no-session-persistence \
 - SQLインジェクション・XSS・CSRFなど OWASP Top 10
 - 依存パッケージの既知脆弱性の兆候
 
-問題がある場合: severity（high/medium/low）・該当箇所・理由を箇条書きで返す。
-問題がない場合: 「問題なし」の一言のみ。前置き・説明文は不要。"
-```
-
-> 手順1で `HEAD~1 HEAD` を対象にした場合は `git diff HEAD~1 HEAD | claude ...` に置き換える。
+問題がある場合: severity（high/medium/low）・該当箇所・理由を箇条書きで挙げる。
+問題がない場合: 「問題なし」のみ。
 
 ---
 
-### 3. DevOps エージェント
+### 3. DevOps レビュー
 
-以下を Bash ツールで実行する：
-
-```bash
-git diff HEAD | claude -p --no-session-persistence \
-  --system-prompt "あなたは DevOps・インフラの専門家です。コード変更を以下の観点でレビューしてください。
+収集した差分を対象に、以下の観点で分析する：
 
 - 本番環境へのデプロイ影響（ダウンタイム・マイグレーション・後方互換性）
 - 環境変数・設定ファイルの変更
@@ -65,11 +52,8 @@ git diff HEAD | claude -p --no-session-persistence \
 - Docker・コンテナ設定の変更
 - ログ・モニタリング・アラートへの影響
 
-問題がある場合: severity（high/medium/low）・該当箇所・理由を箇条書きで返す。
-問題がない場合: 「問題なし」の一言のみ。前置き・説明文は不要。"
-```
-
-> 手順1で `HEAD~1 HEAD` を対象にした場合は `git diff HEAD~1 HEAD | claude ...` に置き換える。
+問題がある場合: severity（high/medium/low）・該当箇所・理由を箇条書きで挙げる。
+問題がない場合: 「問題なし」のみ。
 
 ---
 

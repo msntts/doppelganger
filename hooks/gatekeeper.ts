@@ -4,10 +4,9 @@
  *
  * 判定フロー:
  *   0.   denied_patterns（ALWAYS_DENY）→ 即ブロック
- *   0.2  LLM CLI hard guard → 機密参照あり → 即 ask
- *   0.3  claude -p が hard guard 通過 → 即 allow
- *   0.4  git add/commit（安全）→ 即 allow
- *   0.5  debug/* ブランチ → 全操作を即 allow
+ *   0.1  git add/commit（安全）→ 即 allow
+ *   0.2  per-project allow patterns → 即 allow
+ *   0.3  debug/* ブランチ → 全操作を即 allow
  *   1.   readonly_tools.json に登録済み → 即 allow
  *   2.   LLM 分類（category のみ返す。allow/ask/block の決定は TypeScript が行う）
  *   3.   per-project category_overrides.json → カテゴリ単位の決定上書き
@@ -225,45 +224,6 @@ function isDenied(
       if (command.includes(pattern)) {
         return `Bash: 禁止パターン '${pattern}' を含むためブロック`;
       }
-    }
-  }
-  return null;
-}
-
-// LLM CLI 呼び出し（claude -p / claude --print）の検出
-const LLM_CLI_PATTERN = /\bclaude\s+(?:-p\b|--print\b)/;
-
-// 機密ファイル参照らしき文字列の検出。LLM CLI 呼び出し時に含まれていたら強制 ask。
-// SYSTEM_PROMPT の LLM 判定だけでは見落としうるため、コード側の hard guard として持つ。
-// 注意: ブラックリスト方式のため網羅性は保証されない（任意の `secrets.txt`・`*.token` 等は
-// このリストになければ素通りする）。最終的な責任はユーザー判断に委ねる前提で運用する。
-const SECRET_REF_PATTERNS: ReadonlyArray<RegExp> = [
-  /(^|[\s"'=/])~?\/?\.ssh\//i,
-  /(^|[\s"'=/])\.env(\b|\.|"|')/i,
-  /\.pem\b/i,
-  /\bid_rsa\b/i,
-  /\bid_ed25519\b/i,
-  /credentials/i,
-  /private[_-]?key/i,
-  /\.kube\/config\b/i,
-  /\.aws\/credentials\b/i,
-  /\.netrc\b/i,
-  /service[_-]?account.*\.json\b/i,
-];
-
-function forceAskForLLMCli(
-  toolName: string,
-  toolInput: Record<string, unknown>,
-): string | null {
-  if (toolName !== "Bash") return null;
-  const command = String(toolInput.command ?? "");
-  if (!LLM_CLI_PATTERN.test(command)) return null;
-  if (!/--no-session-persistence\b/.test(command)) {
-    return "claude -p 呼び出しに --no-session-persistence が付いていません。会話履歴が残る形は自動承認対象外です";
-  }
-  for (const pat of SECRET_REF_PATTERNS) {
-    if (pat.test(command)) {
-      return `LLM CLI 呼び出しに機密ファイル参照らしき文字列 (${pat}) が含まれます。送信内容を確認してください`;
     }
   }
   return null;
@@ -558,39 +518,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  // 0.2. LLM CLI 呼び出しでの機密ファイル参照は強制 ask（LLM 判定の前に hard guard）
-  const llmCliAskReason = forceAskForLLMCli(toolName, toolInput);
-  if (llmCliAskReason) {
-    writeLog({
-      ...baseLog,
-      timestamp: new Date().toISOString().slice(0, 19),
-      decision: "ask",
-      reason: llmCliAskReason,
-      latency_ms: 0,
-    });
-    ask(llmCliAskReason);
-    return;
-  }
-
-  // 0.3. LLM CLI が hard guard を通過 → 確定的に自動承認（LLM 判定に委ねると送信内容の憶測で非決定的な ask が出る）
-  if (
-    toolName === "Bash" &&
-    LLM_CLI_PATTERN.test(String(toolInput.command ?? ""))
-  ) {
-    const reason =
-      "claude -p: --no-session-persistence 確認済み・機密参照なし → 自動承認";
-    writeLog({
-      ...baseLog,
-      timestamp: new Date().toISOString().slice(0, 19),
-      decision: "allow",
-      reason,
-      latency_ms: 0,
-    });
-    allow(reason);
-    return;
-  }
-
-  // 0.4. 安全な git ローカル操作 → 自動承認
+  // 0.1. 安全な git ローカル操作 → 自動承認
   //   CLAUDE.md のワークフロールール（「コミット前に /review を呼べ」等）の遵守確認は
   //   gatekeeper の役割外。LLM judge に委ねると CLAUDE.md 知識を適用して ask を返すため
   //   コード側で確定的に承認する。
@@ -613,7 +541,7 @@ async function main(): Promise<void> {
     }
   }
 
-  // 0.45. per-project Bash allow patterns（特定コマンドの静的 allow）
+  // 0.2. per-project Bash allow patterns（特定コマンドの静的 allow）
   if (toolName === "Bash") {
     const cmd = String(toolInput.command ?? "");
     const bashPatterns = loadBashAllowPatterns(data.cwd);
@@ -635,7 +563,7 @@ async function main(): Promise<void> {
     }
   }
 
-  // 0.5. debug/* ブランチ: 全操作を自動承認
+  // 0.3. debug/* ブランチ: 全操作を自動承認
   const branch = currentBranch();
   if (branch?.startsWith("debug/")) {
     const reason = `debug/* ブランチのため自動承認 (branch: ${branch})`;
