@@ -64,5 +64,6 @@
         "repo": "anthropics/skills"
       }
     }
-  }
+  },
+  "model": "sonnet"
 }
