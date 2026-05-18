@@ -140,7 +140,19 @@ async function main(): Promise<void> {
     rotateLog();
     appendFileSync(LOG_PATH, JSON.stringify(entry) + "\n", "utf-8");
 
-    if (state) {
+    // ユーザーがスラッシュコマンドを打った場合、次のターンのために pending_skill をセット
+    // （/review → Claude がスキル実行 → ユーザーが応答 → post_ai になるべき）
+    const slashMatch = prompt.match(/^\/([a-zA-Z][\w-]*)(?:\s|$)/);
+    if (slashMatch) {
+      const nextState: ObserverState = {
+        session_id: sessionId,
+        pending_skill: slashMatch[1],
+        pending_skill_ts: now.toISOString(),
+        pending_skill_args: null,
+      };
+      const stateFile = join(tmpdir(), `claude_observer_${sessionId}.json`);
+      writeFileSync(stateFile, JSON.stringify(nextState), "utf-8");
+    } else if (state) {
       resetState(sessionId, state);
     }
   } catch {
