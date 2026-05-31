@@ -120,9 +120,47 @@ function isNeverSuggest(pattern: string): boolean {
   return NEVER_AUTO_SUGGEST.some((n) => lower.includes(n.toLowerCase()));
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function extractAllowCandidates(_projectDir: string): PatternCandidate[] {
-  return [];
+  const logPath = join(homedir(), ".claude", "gatekeeper-log.jsonl");
+  const entries = readJsonlLines(logPath);
+
+  const counts = new Map<string, { count: number; examples: string[] }>();
+
+  for (const entry of entries) {
+    if (entry["tool"] !== "Bash") continue;
+    if (entry["decision"] !== "allow") continue;
+    if (
+      typeof entry["reason"] !== "string" ||
+      !entry["reason"].includes("静的ルール対象外")
+    )
+      continue;
+    if (
+      typeof entry["timestamp"] !== "string" ||
+      !isWithinDays(entry["timestamp"], 30)
+    )
+      continue;
+
+    const cmd =
+      typeof entry["input_summary"] === "string" ? entry["input_summary"] : "";
+    if (!cmd) continue;
+
+    for (const pattern of extractPatternFromCommand(cmd)) {
+      if (pattern.length < 2) continue;
+      if (isNeverSuggest(pattern)) continue;
+
+      const existing = counts.get(pattern) ?? { count: 0, examples: [] };
+      existing.count++;
+      if (existing.examples.length < 3) {
+        existing.examples.push(cmd.slice(0, 80));
+      }
+      counts.set(pattern, existing);
+    }
+  }
+
+  return Array.from(counts.entries())
+    .map(([pattern, data]) => ({ pattern, ...data }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10);
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
