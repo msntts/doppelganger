@@ -1,19 +1,28 @@
-# observer 層実装 — 判断帰属トラッキング
+# doppelganger /tune skill — Implementation Plan
 
 ## プロジェクト概要
-doppelganger フックに observer 層を追加し、「人間の自発的判断」vs「AI提案を承認した判断」を区別して記録する。
+observer・gatekeeper ログから allow/deny パターン候補を抽出し、ユーザー確認後に `.claude/` 設定ファイルへ書き込む `/tune` スキルを実装する。
 
 ## 環境
-- macOS / TypeScript (tsx)
-- Claude Code hooks (UserPromptSubmit / PreToolUse / PostToolUse / Stop)
+- Windows 11 / TypeScript, tsx（既存 hooks と同スタック）
+- 入力: `~/.claude/gatekeeper-log.jsonl`・`~/.claude/observer-log.jsonl`・`~/.claude/work-log.jsonl`
+- 出力: `.claude/allow_patterns.json`・`.claude/denied_patterns.json`（project-local）・`~/.claude/tune-skip.json`（global）
+
+## 操作仕様
+- `/tune` を呼ぶと過去 30 日の候補リストを表示する
+- ユーザーが番号で選んだものだけが project-local `.claude/*.json` に追記される
+- 却下（skip）した候補は `~/.claude/tune-skip.json` に記録され次回から除外される
+- `NEVER_AUTO_SUGGEST` リストに含まれるパターンは候補に出ない
 
 ## 受け入れ条件
-- 各フックに stdin テストデータを流し込み、`~/.claude/observer-log.jsonl` に期待するエントリが記録されること
-- 実際のセッションで review スキルを呼んだ後の次ユーザーターンが `post_ai` に分類されること
+- `/tune` を呼ぶと allow 候補・deny 候補が表示される（ログが空の場合は「候補なし」で正常終了）
+- 番号選択後、対象 JSON が正しく更新されコミットされる
+- skip した候補が次回実行で出てこない
+- `rm`・`curl | sh` 等の危険パターンが候補に出ない
 
 ## 完了条件
-- `npx tsx hooks/observer-skill.ts` / `observer-prompt.ts` でコンパイルエラーなし
-- Phase 1 受け入れ条件の 4 テストがすべてパス
+- `tsx hooks/tune-helper.ts --project . 2>/dev/null` が JSON を stdout に出力する
+- `/tune` を手動実行して end-to-end が通る
 
 ---
 
@@ -23,188 +32,33 @@ doppelganger フックに observer 層を追加し、「人間の自発的判断
 
 ---
 
-## Phase 1: 最小実装（二値分類: post_ai / autonomous）
+## Phase 1: tune-helper.ts — JSONL 集計・候補抽出
 
-- [x] 1-1. `hooks/observer-skill.ts` 新規作成
-- [x] 1-2. `hooks/observer-prompt.ts` 新規作成
-- [x] 1-3. `settings.json` にフック登録（observer-prompt / observer-skill）
+- [x] 1-1. `hooks/tune-helper.ts` スケルトン + NEVER_AUTO_SUGGEST 定義 → [詳細](docs/briefs/step-1-1-tune-helper-skeleton.md)
+- [ ] 1-2. allow 候補抽出ロジック（gatekeeper-log.jsonl から LLM 経路 Bash を集計）→ [詳細](docs/briefs/step-1-2-allow-candidates.md)
+- [ ] 1-3. deny 候補抽出ロジック（observer rejection × work-log 相関）→ [詳細](docs/briefs/step-1-3-deny-candidates.md)
+- [ ] 1-4. tune-skip.json と既存 JSON による重複除外 → [詳細](docs/briefs/step-1-4-dedup.md)
 
-## Phase 2: Agent 検出
+## Phase 2: skills/tune/SKILL.md — フロー制御 [REVIEW]
 
-- [x] 2-1. `hooks/observer-agent.ts` 新規作成
-- [x] 2-2. `settings.json` に PostToolUse Agent matcher を追加
+- [ ] 2-1. `skills/tune/SKILL.md` フロントマター + 候補表示・番号選択フォーマット定義
+- [ ] 2-2. JSON 書き込み手順（allow_patterns.json・denied_patterns.json の作成/更新）
+- [ ] 2-3. tune-skip.json 更新 + 自動 git commit 手順
 
-## Phase 3: シグナル強度分類（テキスト解析）
+## Phase 3: 文書化
 
-- [x] 3-1. `observer-prompt.ts` に `response_type` フィールドを追加
-
-## Phase 4: Stop フックによるクリーンアップ
-
-- [x] 4-1. `hooks/observer-cleanup.ts` 新規作成
-- [x] 4-2. `settings.json` に Stop フックを追加
+- [ ] 3-1. `CLAUDE.md` に `/tune` の位置づけ追記（`fewer-permission-prompts` との使い分け含む）
 
 ---
-
-## Phase 5: analyze-observer スキル
-
-- [x] 5-1. `skills/analyze-observer/SKILL.md` 新規作成
 
 ## メモ・決定事項
-
-### 解決する問題
-
-Claude Code の insights レポートはセッション JSONL の「ユーザーターン」をすべて「人間の発言」として帰属する。しかし実際には review/advisor スキルの出力を人間が中継している場合があり、ログ上は同じ形をしている。
-
-「人間が自発的に判断したこと」と「AIが提案して人間が承認したこと」を区別できないと、真の判断基準モデルを学習できない。
-
-### 計測したいシグナル（優先順位順）
-
-1. **エージェント提案を人間が否定・修正した** — 価値観が最も純粋に出る
-2. **エージェント介在なしに人間が自発的に述べた制約・仮説・修正** — 判断基準のコア
-3. **エージェント提案を人間がそのまま承認した** — 弱いシグナル（ノイズ多め）
-
-### クロスターン状態管理
-
-フック間で状態を共有する手段はファイルのみ（環境変数はプロセスをまたいで共有不可）。セッション単位の一時ファイルを使う。
-
-```
-/tmp/claude_observer_{session_id}.json
-```
-
-```typescript
-interface ObserverState {
-  session_id: string;
-  pending_skill: string | null;      // 直前に呼ばれたスキル名
-  pending_skill_ts: string | null;   // ISO タイムスタンプ
-  pending_skill_args: string | null; // args 先頭100文字
-}
-```
-
-**TTL**: `pending_skill_ts` から60分以上経過していれば `null` 扱い（陳腐化防止）。
-
-### 処理フロー
-
-```
-[Skill ツール呼び出し]
-  PreToolUse (observer-skill.ts, matcher: Skill)
-    → /tmp/claude_observer_{session_id}.json に pending_skill を書く
-
-[人間がメッセージを送る]
-  UserPromptSubmit (observer-prompt.ts)
-    → /tmp/claude_observer_{session_id}.json を読む
-    → pending_skill が存在: human_attribution = "post_ai"
-    → pending_skill が null:  human_attribution = "autonomous"
-    → observer-log.jsonl に記録
-    → pending_skill をリセット
-
-[Claude のターン終了]
-  Stop (observer-cleanup.ts) ← Phase 4
-    → tmpファイル削除
-```
-
-### 出力ログスキーマ: `~/.claude/observer-log.jsonl`
-
-```typescript
-interface ObserverEntry {
-  timestamp: string;           // ISO 秒精度
-  session_id: string;
-  event_type: "user_turn" | "skill_invoked" | "agent_invoked";
-
-  // user_turn フィールド
-  prompt_preview?: string;     // 先頭200文字
-  prompt_len?: number;
-  human_attribution: "autonomous" | "post_ai" | "unknown";
-
-  // post_ai のとき追加
-  preceding_skill?: string;
-  preceding_skill_ts?: string;
-  ai_elapsed_sec?: number;
-
-  // skill_invoked フィールド
-  skill_name?: string;
-  skill_args?: string;         // 先頭100文字
-
-  // agent_invoked フィールド
-  agent_description?: string;  // 先頭100文字
-
-  // 共通
-  cwd?: string;
-}
-```
-
-### フック追加後の全体構成
-
-```
-UserPromptSubmit → caffeinate.ts
-               → observer-prompt.ts   ← Phase 1
-
-PreToolUse     → gatekeeper.ts
-               → remind-toolsearch.ts (matcher: mcp__.*)
-               → observer-skill.ts    ← Phase 1 (matcher: Skill)
-
-PostToolUse    → work-logger.ts
-               → observer-agent.ts    ← Phase 2 (matcher: Agent)
-
-Stop           → caffeinate.ts
-               → observer-cleanup.ts  ← Phase 4
-```
-
-### Phase 1 受け入れテスト
-
-```bash
-# 1. observer-skill.ts テスト
-echo '{"hook_event_name":"PreToolUse","tool_name":"Skill","tool_input":{"skill":"review"},"session_id":"test-123"}' \
-  | npx tsx hooks/observer-skill.ts
-# → /tmp/claude_observer_test-123.json が作成され pending_skill="review" が入っていること
-
-# 2. observer-prompt.ts テスト (post_ai パス)
-echo '{"hook_event_name":"UserPromptSubmit","session_id":"test-123","prompt":"OK 進めて"}' \
-  | npx tsx hooks/observer-prompt.ts
-# → ~/.claude/observer-log.jsonl に human_attribution="post_ai", preceding_skill="review" のエントリが追記されること
-# → /tmp/claude_observer_test-123.json の pending_skill が null になっていること
-
-# 3. observer-prompt.ts テスト (autonomous パス)
-echo '{"hook_event_name":"UserPromptSubmit","session_id":"new-456","prompt":"設計について制約を追加したい"}' \
-  | npx tsx hooks/observer-prompt.ts
-# → ~/.claude/observer-log.jsonl に human_attribution="autonomous" のエントリが追記されること
-
-# 4. 実際のセッションで review スキルを呼んだ後の次のユーザーターンが post_ai に分類されること
-```
-
-### Phase 3 テキスト分類パターン
-
-```typescript
-const REJECTION_PATTERNS = [/却下|やり直し|違う|だめ|NG|使えない|別の/i];
-const MODIFICATION_PATTERNS = [/でも|ただし|修正|変えて|直して|追加して|ただ(?!し)|一方で/];
-const APPROVAL_PATTERNS = [/^(OK|ok|了解|承認|進めて|続けて|問題ない|大丈夫|いいです?|そうで?す|はい)[\s。！]?$/];
-// response_type: "approval" | "modification" | "rejection" | "unclear"
-```
-
-### スラッシュコマンド検出（observer-prompt.ts の追加設計）
-
-ユーザーが `/review` 等のスラッシュコマンドを打った場合、Claude Code は `Skill` ツールを経由せず
-スキル内容をシステムプロンプトに注入して処理する。そのため PreToolUse（observer-skill.ts）が発火しない。
-
-対処: observer-prompt.ts で `/^\/([a-zA-Z][\w-]*)` にマッチするプロンプトを検出し、
-そのターン自体は `autonomous` として記録しつつ、次のターンのために `pending_skill` をセットする。
-
-```
-Turn N:  /review  → autonomous（ユーザーが自発的に実行）+ pending_skill="review"
-Turn N+1: 返信    → post_ai
-```
-
-### work-logger.ts を拡張せず独立フックにする理由
-
-work-logger.ts は PostToolUse のみを扱い、UserPromptSubmit / PreToolUse をまたいだ状態管理は行っていない。observer 層は「複数フックにまたがるセッション状態」を管理する必要があり、アーキテクチャ的に別物。
-
-### Phase 1 に LLM 分類を含めない理由
-
-gatekeeper.ts の開発で得た教訓: LLM 分類は非決定的になりやすく、設計検証が難しい。Phase 1 は「スキルが呼ばれたか否か」という二値の事実だけを記録し、テキスト分類は実データが蓄積された Phase 3 以降で導入する。
-
----
+- helper script は `hooks/tune-helper.ts`（他 hooks と同ディレクトリで一元管理）
+- allow 候補の信号源: `gatekeeper-log.jsonl` の `tool=Bash`, `decision=allow`, reason に "静的ルール対象外" を含むエントリ
+- deny 候補の信号源: `observer-log.jsonl` の `response_type=rejection` × `work-log.jsonl` の同セッション5分前以内の Bash コマンドの相関
+- allow_patterns.json フォーマット: `{ "bash": ["pattern1", ...] }`
+- denied_patterns.json フォーマット: `{ "tools": [], "bash_patterns": ["pattern1", ...] }`
+- 書き込み先は project-local `.claude/`（`~/.claude/` には書かない）
+- `fewer-permission-prompts` スキル（settings.json permissions.allow）とは別系統。deny 提案に独自価値がある
 
 ## 完了済みフェーズ
-
 <!-- Phase {N}: {フェーズ名} `{開始ハッシュ}..{終了ハッシュ}` -->
-- Phase 0-5: claude-helm → doppelganger 統合 `d20eb86`
-- gatekeeper カテゴリ分類アーキテクチャリファクタリング（全フェーズ完了）
