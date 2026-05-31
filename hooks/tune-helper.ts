@@ -301,9 +301,11 @@ async function main(): Promise<void> {
     rawAllow,
     [skipList, existingAllow],
   );
+  // allow 候補と重複するパターンは deny 側から除外（安全側に倒す）
+  const newAllowPatterns = new Set(rawAllow.map((c) => c.pattern));
   const { filtered: denyFiltered, removedCount: denyRemoved } = dedup(
     rawDeny,
-    [skipList, existingDeny, existingAllow],
+    [skipList, existingDeny, existingAllow, newAllowPatterns],
   );
 
   const output: TuneOutput = {
