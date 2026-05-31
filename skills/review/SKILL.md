@@ -2,6 +2,9 @@
 name: review
 description: コード変更を Security/DevOps の2観点で独立エージェントレビューし統合判定を返す。「レビューして」「コミット前チェック」「push 前確認」「変更を見て」「これコミットして大丈夫か」等で使う。CLAUDE.md ルールにより毎コミット直前に自動起動する。
 user-invocable: true
+allowed-tools:
+  - Bash
+  - Agent
 ---
 
 # /review
