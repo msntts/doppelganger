@@ -151,6 +151,21 @@ lockfile（`pnpm-lock.yaml` / `uv.lock`）は必ずコミットする。`.gitign
 `/gatekeeper` が `ask` を推奨 → ユーザーに確認を求めてから実行する。
 `/gatekeeper` が `block` を推奨 → 実行しない。理由をユーザーに伝える。
 
+### Tune（承認ルールのチューニング）
+
+`/tune` は project-local の `.claude/allow_patterns.json` と `.claude/denied_patterns.json` を育てるスキル。
+gatekeeper が「静的ルール対象外 → LLM 判定を信頼して自動承認」した過去の Bash コマンドや、
+observer が rejection と判定したコマンドパターンを分析し、候補をユーザーに提示する。
+
+**`fewer-permission-prompts` との使い分け:**
+- `fewer-permission-prompts` → `settings.json` の `permissions.allow` を操作（Claude Code 標準の許可リスト）
+- `/tune` → `hooks/gatekeeper.ts` 経由の `allow_patterns.json` / `denied_patterns.json` を操作
+  - **deny パターンの提案** は `/tune` にしかない（`fewer-permission-prompts` はブロック提案をしない）
+  - allow 側は両方が効く。重複追加しても問題ないが、二重管理になる点に注意
+
+**使用タイミング:** 定期的（週1〜月1）に `/tune` を実行してハーネスを育てる。
+ログが蓄積するほど候補の精度が上がる。
+
 ## 応答スタイル
 - 簡潔に。前置き・要約・絵文字は不要
 - 結論から先に述べる
