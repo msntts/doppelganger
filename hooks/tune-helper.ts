@@ -163,9 +163,71 @@ function extractAllowCandidates(_projectDir: string): PatternCandidate[] {
     .slice(0, 10);
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function extractDenyCandidates(_projectDir: string): PatternCandidate[] {
-  return [];
+  const observerLogPath = join(homedir(), ".claude", "observer-log.jsonl");
+  const workLogPath = join(homedir(), ".claude", "work-log.jsonl");
+
+  const observerEntries = readJsonlLines(observerLogPath);
+  const workEntries = readJsonlLines(workLogPath);
+
+  // セッション別に Bash コマンドをインデックスする
+  const workBySession = new Map<
+    string,
+    { timestamp: Date; command: string }[]
+  >();
+  for (const entry of workEntries) {
+    if (entry["tool"] !== "Bash") continue;
+    const sid = typeof entry["session_id"] === "string" ? entry["session_id"] : "";
+    const cmd = typeof entry["command"] === "string" ? entry["command"] : "";
+    const ts = typeof entry["timestamp"] === "string" ? entry["timestamp"] : "";
+    if (!sid || !cmd || !ts) continue;
+    const date = new Date(ts);
+    if (isNaN(date.getTime())) continue;
+    const list = workBySession.get(sid) ?? [];
+    list.push({ timestamp: date, command: cmd });
+    workBySession.set(sid, list);
+  }
+
+  const counts = new Map<string, { count: number; examples: string[] }>();
+
+  for (const entry of observerEntries) {
+    if (entry["response_type"] !== "rejection") continue;
+    if (
+      typeof entry["timestamp"] !== "string" ||
+      !isWithinDays(entry["timestamp"], 30)
+    )
+      continue;
+
+    const sid =
+      typeof entry["session_id"] === "string" ? entry["session_id"] : "";
+    const rejectionTime = new Date(entry["timestamp"] as string);
+    if (!sid || isNaN(rejectionTime.getTime())) continue;
+
+    const sessionWork = workBySession.get(sid) ?? [];
+    for (const w of sessionWork) {
+      const diffMs = rejectionTime.getTime() - w.timestamp.getTime();
+      if (diffMs < 0 || diffMs > 5 * 60 * 1000) continue;
+
+      for (const pattern of extractPatternFromCommand(w.command)) {
+        if (pattern.length < 2) continue;
+        if (isNeverSuggest(pattern)) continue;
+        // git add/commit は安全なので除外
+        if (pattern === "git add" || pattern === "git commit") continue;
+
+        const existing = counts.get(pattern) ?? { count: 0, examples: [] };
+        existing.count++;
+        if (existing.examples.length < 3) {
+          existing.examples.push(w.command.slice(0, 80));
+        }
+        counts.set(pattern, existing);
+      }
+    }
+  }
+
+  return Array.from(counts.entries())
+    .map(([pattern, data]) => ({ pattern, ...data }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
 }
 
 function loadSkipList(): Set<string> {
