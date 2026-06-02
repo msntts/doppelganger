@@ -140,13 +140,13 @@ lockfile（`pnpm-lock.yaml` / `uv.lock`）は必ずコミットする。`.gitign
 - ファイル読み取り（Read・Bash の cat/grep/find/ls 等）
 - git status / log / diff / fetch / pull
 - ローカル git 操作（add・commit）
+- git管理ファイルの操作全般。ロールバックできるため.claude以下でも安全とみなす
 
 **評価が必要（`/gatekeeper` を呼ぶ）:**
 - 外部 API・サービスへの書き込み
 - git push / デプロイ操作
 - git 管理外のファイルへの書き込み（~/.ssh/ 等）
 - rm / rmdir（git 管理外のパスが含まれる場合）
-- 上記に当てはまるか迷う操作
 
 `/gatekeeper` が `ask` を推奨 → ユーザーに確認を求めてから実行する。
 `/gatekeeper` が `block` を推奨 → 実行しない。理由をユーザーに伝える。
