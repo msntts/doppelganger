@@ -11,13 +11,13 @@ mkdir -p "$CLAUDE_DIR"
 
 # tsx の確認
 if ! command -v tsx &>/dev/null; then
-  echo "tsx が見つかりません。npm install -g tsx でインストールしてください。"
+  echo "tsx が見つかりません。pnpm add -g tsx でインストールしてください。"
   exit 1
 fi
 
-# --- npm install（型定義等） ---
+# --- pnpm install（型定義等） ---
 cd "$SCRIPT_DIR"
-npm install --silent
+pnpm install --silent
 cd - >/dev/null
 
 # --- CLAUDE.md ---
