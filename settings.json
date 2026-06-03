@@ -6,6 +6,7 @@
       "Bash(file *)"
     ]
   },
+  "model": "sonnet",
   "hooks": {
     "UserPromptSubmit": [
       {
@@ -21,6 +22,16 @@
           {
             "type": "command",
             "command": "tsx ~/.claude/hooks/observer-prompt.ts"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "tsx ~/.claude/hooks/gatekeeper.ts"
           }
         ]
       }
@@ -99,5 +110,5 @@
       }
     }
   },
-  "model": "sonnet"
+  "advisorModel": "opus"
 }

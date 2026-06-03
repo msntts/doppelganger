@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /**
- * PreToolUse hook — 静的ガードのみ。LLM 判定は /gatekeeper スキルに委譲。
+ * PreToolUse / PermissionRequest hook — 静的ガードのみ。LLM 判定は /gatekeeper スキルに委譲。
  *
  * 判定フロー:
  *   0.   denied_patterns（ALWAYS_DENY）→ 即ブロック
@@ -9,6 +9,8 @@
  *   0.3  debug/* ブランチ → 全操作を即 allow
  *   1.   readonly_tools.json に登録済み → 即 allow
  *   2.   それ以外 → allow（LLM 判定は /gatekeeper スキルが Claude 側で担う）
+ *
+ * PermissionRequest イベントでも同じ判定ロジックを使い、ネイティブ確認ダイアログを抑制する。
  *
  * エラー時はフック自体の障害でユーザー操作を止めないよう exit 0 にフォールバックする。
  */
@@ -28,6 +30,7 @@ const LOG_PATH = join(homedir(), ".claude", "gatekeeper-log.jsonl");
 const LOG_MAX_BYTES = 10 * 1024 * 1024; // 10MB
 
 interface HookInput {
+  hook_event_name?: string;
   tool_name: string;
   tool_input: Record<string, unknown>;
   session_id?: string;
@@ -189,29 +192,43 @@ function loadReadonlyTools(cwd?: string): Set<string> {
   }
 }
 
-function allow(reason: string): void {
-  process.stdout.write(
-    JSON.stringify({
-      hookSpecificOutput: {
-        hookEventName: "PreToolUse",
-        permissionDecision: "allow",
-        permissionDecisionReason: reason,
-      },
-    }) + "\n",
-  );
+function allow(reason: string, eventName = "PreToolUse"): void {
+  const output =
+    eventName === "PermissionRequest"
+      ? {
+          hookSpecificOutput: {
+            hookEventName: "PermissionRequest",
+            decision: { behavior: "allow" },
+          },
+        }
+      : {
+          hookSpecificOutput: {
+            hookEventName: "PreToolUse",
+            permissionDecision: "allow",
+            permissionDecisionReason: reason,
+          },
+        };
+  process.stdout.write(JSON.stringify(output) + "\n");
   process.exit(0);
 }
 
-function block(reason: string): void {
-  process.stdout.write(
-    JSON.stringify({
-      hookSpecificOutput: {
-        hookEventName: "PreToolUse",
-        permissionDecision: "deny",
-        permissionDecisionReason: reason,
-      },
-    }) + "\n",
-  );
+function block(reason: string, eventName = "PreToolUse"): void {
+  const output =
+    eventName === "PermissionRequest"
+      ? {
+          hookSpecificOutput: {
+            hookEventName: "PermissionRequest",
+            decision: { behavior: "deny" },
+          },
+        }
+      : {
+          hookSpecificOutput: {
+            hookEventName: "PreToolUse",
+            permissionDecision: "deny",
+            permissionDecisionReason: reason,
+          },
+        };
+  process.stdout.write(JSON.stringify(output) + "\n");
   process.exit(0);
 }
 
@@ -222,6 +239,7 @@ async function main(): Promise<void> {
   }
 
   const data: HookInput = JSON.parse(Buffer.concat(chunks).toString("utf-8"));
+  const eventName = data.hook_event_name ?? "PreToolUse";
   const toolName = data.tool_name;
   const toolInput = data.tool_input ?? {};
   const summary = inputSummary(toolName, toolInput);
@@ -245,7 +263,7 @@ async function main(): Promise<void> {
       reason: deniedReason,
       latency_ms: 0,
     });
-    block(deniedReason);
+    block(deniedReason, eventName);
     return;
   }
 
@@ -264,7 +282,7 @@ async function main(): Promise<void> {
         reason,
         latency_ms: 0,
       });
-      allow(reason);
+      allow(reason, eventName);
       return;
     }
   }
@@ -286,7 +304,7 @@ async function main(): Promise<void> {
         reason,
         latency_ms: 0,
       });
-      allow(reason);
+      allow(reason, eventName);
       return;
     }
   }
@@ -329,7 +347,7 @@ async function main(): Promise<void> {
     reason,
     latency_ms: 0,
   });
-  allow(reason);
+  allow(reason, eventName);
 }
 
 main().catch((err: Error) => {
@@ -343,5 +361,5 @@ main().catch((err: Error) => {
     latency_ms: 0,
   });
   process.stderr.write(`[gatekeeper] error: ${err.message}\n`);
-  allow(`gatekeeper error (fail-open): ${err.message}`);
+  allow(`gatekeeper error (fail-open): ${err.message}`, "PreToolUse");
 });
