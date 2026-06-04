@@ -27,7 +27,17 @@ const APPROVAL_RE = /OK|ok|了解|承認|進めて|続けて|問題ない|大丈
 
 type ResponseType = "approval" | "modification" | "rejection" | "unclear";
 
+// observer-stop-prompt.ts が表示する選択肢メニューへの直接入力
+const SELECTION_MAP: Record<string, ResponseType> = {
+  "1": "approval",
+  "2": "modification",
+  "3": "rejection",
+  "4": "unclear",
+};
+
 function classifyResponse(text: string): ResponseType {
+  const trimmed = text.trim();
+  if (SELECTION_MAP[trimmed]) return SELECTION_MAP[trimmed];
   if (REJECTION_RE.test(text)) return "rejection";
   if (MODIFICATION_RE.test(text)) return "modification";
   // 承認語を含み短いメッセージ（30文字以内）を承認とみなす

@@ -105,6 +105,14 @@
         "hooks": [
           {
             "type": "command",
+            "command": "tsx ~/.claude/hooks/observer-stop-prompt.ts"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
             "command": "tsx ~/.claude/hooks/observer-cleanup.ts"
           }
         ]
