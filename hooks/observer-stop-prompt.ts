@@ -1,27 +1,12 @@
 #!/usr/bin/env tsx
 /**
- * Stop hook — pending_skill がある場合、次のアクションの選択肢をユーザーに表示する
- *
- * 選択肢（レビュー系）:
- *   1 = 承認（そのまま続ける）
- *   2 = 修正あり（一部変えてほしい）
- *   3 = 却下（やり直し）
- *   4 = その他
- *
- * 選択肢（タスク系スキル）:
- *   1 = 成功（完了）
- *   2 = 部分的（一部未達）
- *   3 = 失敗（やり直し）
- *   4 = その他
- *
- * ユーザーが 1〜4 を入力すると observer-prompt.ts が response_type に直接マップする。
+ * Stop hook — 未消費の skill_start がある場合、ユーザーに選択肢を表示する
  */
 
-import { existsSync, readFileSync } from "fs";
-import { join } from "path";
-import { tmpdir } from "os";
+import { type SessionEvent, readEvents } from "./event-log.ts";
 
-// データ取得・完了系スキル（「承認/却下」より「成功/失敗」の語が合う）
+const TTL_MS = 60 * 60 * 1000;
+
 const TASK_COMPLETION_SKILLS = new Set([
   "freee",
   "kot",
@@ -29,6 +14,20 @@ const TASK_COMPLETION_SKILLS = new Set([
   "pl-extract",
   "analyze-observer",
 ]);
+
+function findPendingSkill(events: SessionEvent[], now: Date): string | null {
+  for (let i = events.length - 1; i >= 0; i--) {
+    const ev = events[i];
+    if (ev.kind === "user_response") return null;
+    if (ev.kind === "skill_start") {
+      const elapsed = now.getTime() - new Date(ev.ts).getTime();
+      if (elapsed > TTL_MS) return null;
+      return ev.skill;
+    }
+    // agent_invoked: skip
+  }
+  return null;
+}
 
 async function main(): Promise<void> {
   const chunks: Buffer[] = [];
@@ -39,22 +38,18 @@ async function main(): Promise<void> {
   try {
     const data = JSON.parse(Buffer.concat(chunks).toString("utf-8"));
     const sessionId: string = data.session_id ?? "";
-    const stateFile = join(tmpdir(), `claude_observer_${sessionId}.json`);
 
-    if (!existsSync(stateFile)) {
-      process.exit(0);
-    }
+    const events = readEvents(sessionId);
+    const pendingSkill = findPendingSkill(events, new Date());
 
-    const state = JSON.parse(readFileSync(stateFile, "utf-8"));
-
-    if (state.pending_skill) {
-      if (TASK_COMPLETION_SKILLS.has(state.pending_skill)) {
+    if (pendingSkill) {
+      if (TASK_COMPLETION_SKILLS.has(pendingSkill)) {
         process.stderr.write(
-          `\n[observer] /${state.pending_skill} 完了 — 成否を記録: 1=成功 / 2=部分的 / 3=失敗 / 4=その他\n`,
+          `\n[observer] /${pendingSkill} 完了 — 成否を記録: 1=成功 / 2=部分的 / 3=失敗 / 4=その他\n`,
         );
       } else {
         process.stderr.write(
-          `\n[observer] /${state.pending_skill} 完了 — 次のアクションを選択: 1=承認 / 2=修正あり / 3=却下 / 4=その他\n`,
+          `\n[observer] /${pendingSkill} 完了 — 次のアクションを選択: 1=承認 / 2=修正あり / 3=却下 / 4=その他\n`,
         );
       }
     }

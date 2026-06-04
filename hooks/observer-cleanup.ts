@@ -1,14 +1,12 @@
 #!/usr/bin/env tsx
 /**
- * Stop hook — pending_skill が消費済みの状態ファイルのみ削除する
+ * Stop hook — event log を MAX_ENTRIES 件にトリムする
  *
- * Stop はターン終了ごとに発火する。未消費の pending_skill がある場合は
- * 次の UserPromptSubmit で post_ai 判定に使うため削除しない。
+ * セッション中はファイルを削除しない。OS が /tmp をセッション終了後に管理する。
  */
 
-import { existsSync, readFileSync, unlinkSync } from "fs";
-import { join } from "path";
-import { tmpdir } from "os";
+import { existsSync } from "fs";
+import { eventLogPath, trimLog } from "./event-log.ts";
 
 async function main(): Promise<void> {
   const chunks: Buffer[] = [];
@@ -19,16 +17,10 @@ async function main(): Promise<void> {
   try {
     const data = JSON.parse(Buffer.concat(chunks).toString("utf-8"));
     const sessionId: string = data.session_id ?? "";
-    const stateFile = join(tmpdir(), `claude_observer_${sessionId}.json`);
-    if (!existsSync(stateFile)) {
-      process.exit(0);
+    const path = eventLogPath(sessionId);
+    if (existsSync(path)) {
+      trimLog(path);
     }
-
-    const state = JSON.parse(readFileSync(stateFile, "utf-8"));
-    if (state.pending_skill === null || state.pending_skill === undefined) {
-      unlinkSync(stateFile);
-    }
-    // pending_skill が残っている場合は削除しない（次のユーザーターンで消費される）
   } catch {
     // fail-open
   }

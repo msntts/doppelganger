@@ -1,18 +1,9 @@
 #!/usr/bin/env tsx
 /**
- * PreToolUse hook (matcher: Skill) — Skill 呼び出しをセッション状態ファイルに記録する
+ * PreToolUse hook (matcher: Skill) — Skill 呼び出しを event log に記録する
  */
 
-import { writeFileSync } from "fs";
-import { join } from "path";
-import { tmpdir } from "os";
-
-interface ObserverState {
-  session_id: string;
-  pending_skill: string | null;
-  pending_skill_ts: string | null;
-  pending_skill_args: string | null;
-}
+import { appendEvent } from "./event-log.ts";
 
 async function main(): Promise<void> {
   const chunks: Buffer[] = [];
@@ -29,17 +20,15 @@ async function main(): Promise<void> {
 
     const sessionId: string = data.session_id ?? "";
     const skill: string = data.tool_input?.skill ?? "";
-    const args: string = String(data.tool_input?.args ?? "").slice(0, 100);
+    const args = String(data.tool_input?.args ?? "").slice(0, 100) || null;
 
-    const state: ObserverState = {
+    appendEvent(sessionId, {
+      kind: "skill_start",
       session_id: sessionId,
-      pending_skill: skill || null,
-      pending_skill_ts: new Date().toISOString(),
-      pending_skill_args: args || null,
-    };
-
-    const stateFile = join(tmpdir(), `claude_observer_${sessionId}.json`);
-    writeFileSync(stateFile, JSON.stringify(state), "utf-8");
+      skill,
+      args,
+      source: "claude_tool",
+    });
   } catch {
     // fail-open
   }
