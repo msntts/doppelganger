@@ -63,3 +63,6 @@ MSYS=winsymlinks:nativestrict ln -s "$SETTINGS_SRC" "$SETTINGS_DST"
 echo "  settings.json のシンボリックリンクを作成しました"
 
 echo "完了。Claude Code を再起動してください。"
+echo ""
+echo "ヒント: /tune でハーネスの承認ルールを自動チューニングできます。"
+echo "       ログが蓄積する 30 日後以降に実行すると候補精度が上がります。"

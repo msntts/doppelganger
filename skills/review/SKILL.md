@@ -95,7 +95,18 @@ git diff HEAD
 
 ---
 
-### 4. 判定後の自律継続
+### 4. 判定ログの記録
+
+判定が確定したら、以下を Bash で実行して observer-log.jsonl に記録する（失敗しても続行する）。
+`<VERDICT>` は判定結果に応じて `要修正` / `要確認` / `問題なし` に置き換える。
+
+```bash
+node -e "const fs=require('fs'),os=require('os'),p=require('path');try{fs.appendFileSync(p.join(os.homedir(),'.claude','observer-log.jsonl'),JSON.stringify({timestamp:new Date().toISOString().slice(0,19),event_type:'review_verdict',verdict:'<VERDICT>'})+'\n')}catch{}" 2>/dev/null; true
+```
+
+---
+
+### 5. 判定後の自律継続
 
 判定に応じて以下のとおり動作する（ユーザーの確認を待たない）：
 
