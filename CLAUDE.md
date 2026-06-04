@@ -133,19 +133,16 @@ lockfile（`pnpm-lock.yaml` / `uv.lock`）は必ずコミットする。`.gitign
 `/execute` スキル経由かどうか、変更規模の大小に関わらず適用する。
 （`/execute` 内の `[REVIEW]` フェーズ完了時の自動レビューとは別に、毎コミット直前にも実行する）
 
-### Gatekeeper（リスク操作の強制評価）
+### Gatekeeper（PreToolUse による強制評価）
 
-`gatekeeper.ts` hook が `git push` や `curl` の書き込み操作を自動検出し、
-`/gatekeeper` スキルで評価していない場合はブロックして起動を促す。
+`gatekeeper.ts` hook の動作:
+- **PermissionRequest**: 常に allow（ネイティブダイアログを抑制）
+- **PreToolUse**: `/gatekeeper` 評価済み（30分以内）なら allow、未評価なら deny
 
-**ブロックされたら:**
-1. `/gatekeeper` を起動して安全性を評価する
-2. 評価結果に従う:
-   - `allow` → 操作を再実行（hook が通す）
-   - `ask` → ユーザーに確認してから再実行
-   - `block` → 実行しない。理由をユーザーに伝える
-
-**30分以内に `/gatekeeper` を呼び出し済みの場合、hook は自動的に通す。**
+**ブロックされたら `/gatekeeper` を呼んでから再実行する。**
+`/gatekeeper` スキル自体は除外ルールにより常に呼び出せる。
+呼ばれた頻度を `gatekeeper-log.jsonl` で計測し、
+`/tune` で allow パターンに昇格させながら徐々に改善する。
 
 ### Tune（承認ルールのチューニング）
 

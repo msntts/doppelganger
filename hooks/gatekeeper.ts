@@ -8,11 +8,11 @@
  *   0.2  per-project allow patterns → 即 allow
  *   0.3  debug/* ブランチ → 全操作を即 allow
  *   1.   readonly_tools.json に登録済み → 即 allow
- *   2.   リスクある Bash 操作（git push / curl 書き込み等）かつ /gatekeeper 未評価 → block
- *   2.1  同上かつ /gatekeeper 評価済み（30分以内） → allow
- *   3.   それ以外 → allow
+ *   2.   それ以外（PermissionRequest）→ allow（ネイティブダイアログ抑制）
+ *   2.   それ以外（PreToolUse）→ /gatekeeper 評価済みなら allow、未評価なら deny
  *
- * PermissionRequest イベントでも同じ判定ロジックを使い、ネイティブ確認ダイアログを抑制する。
+ * PermissionRequest は常に allow を返してネイティブダイアログを抑制する。
+ * PreToolUse で /gatekeeper 評価済みフラグを確認して実際の強制を行う。
  *
  * エラー時はフック自体の障害でユーザー操作を止めないよう exit 0 にフォールバックする。
  */
@@ -30,7 +30,8 @@ import { isAbsolute, join } from "path";
 
 const LOG_PATH = join(homedir(), ".claude", "gatekeeper-log.jsonl");
 const LOG_MAX_BYTES = 10 * 1024 * 1024; // 10MB
-const GATEKEEPER_TTL_MS = 30 * 60 * 1000; // 30分以内の /gatekeeper 呼び出しを有効とみなす
+const GATEKEEPER_FLAG = join(homedir(), ".claude", ".gatekeeper-last-called");
+const GATEKEEPER_TTL_MS = 30 * 60 * 1000;
 
 interface HookInput {
   hook_event_name?: string;
@@ -168,23 +169,8 @@ const NEVER_READONLY: ReadonlySet<string> = new Set([
   "Monitor",
 ]);
 
-// git push / curl 書き込み操作 — /gatekeeper による事前評価が必要なパターン
-const RISKY_BASH_PATTERNS: ReadonlyArray<RegExp> = [
-  /\bgit\s+push\b/,
-  /\bcurl\b.*\s-X\s+(POST|PUT|DELETE|PATCH)\b/i,
-  /\bcurl\b.*--request\s+(POST|PUT|DELETE|PATCH)\b/i,
-  /\bcurl\b.*\s--data\b/i,
-  /\bcurl\b.*\s-d\s/,
-];
 
-function isRiskyBashCommand(cmd: string): boolean {
-  return RISKY_BASH_PATTERNS.some((p) => p.test(cmd));
-}
-
-// /gatekeeper スキルが呼ばれたとき SKILL.md が書くフラグファイルのパス
-const GATEKEEPER_FLAG = join(homedir(), ".claude", ".gatekeeper-last-called");
-
-function hasRecentGatekeeperCall(_sessionId: string): boolean {
+function hasRecentGatekeeperCall(): boolean {
   try {
     if (!existsSync(GATEKEEPER_FLAG)) return false;
     const ts = readFileSync(GATEKEEPER_FLAG, "utf-8").trim();
@@ -296,6 +282,14 @@ async function main(): Promise<void> {
     }
   }
 
+  // 0.1.5. /gatekeeper スキル自体は常に allow（自己ブロック防止）
+  if (toolName === "Skill" && String(toolInput.skill ?? "") === "gatekeeper") {
+    const reason = "/gatekeeper スキル自体は除外 → 自動承認";
+    writeLog({ ...baseLog, timestamp: new Date().toISOString().slice(0, 19), decision: "allow", reason, latency_ms: 0 });
+    allow(reason, eventName);
+    return;
+  }
+
   // 0.2. per-project Bash allow patterns（特定コマンドの静的 allow）
   if (toolName === "Bash") {
     const cmd = String(toolInput.command ?? "");
@@ -347,30 +341,25 @@ async function main(): Promise<void> {
     return;
   }
 
-  // 2. リスクある Bash 操作 — /gatekeeper 評価が必要
-  if (toolName === "Bash" && isRiskyBashCommand(String(toolInput.command ?? ""))) {
-    if (hasRecentGatekeeperCall(data.session_id ?? "")) {
-      const reason = "/gatekeeper 評価済み（30分以内）→ 承認";
-      writeLog({ ...baseLog, timestamp: new Date().toISOString().slice(0, 19), decision: "allow", reason, latency_ms: 0 });
-      allow(reason, eventName);
-    } else {
-      const reason = `要 /gatekeeper 評価: ${summary.slice(0, 80)}`;
-      writeLog({ ...baseLog, timestamp: new Date().toISOString().slice(0, 19), decision: "block", reason, latency_ms: 0 });
-      block(reason, eventName, "/gatekeeper を起動して評価してから再実行してください");
-    }
+  // 2. それ以外
+  //   PermissionRequest: 常に allow（ネイティブダイアログ抑制）
+  //   PreToolUse: /gatekeeper 評価済みなら allow、未評価なら deny
+  if (eventName === "PermissionRequest") {
+    const reason = "静的ルール対象外 → PermissionRequest allow（ダイアログ抑制）";
+    writeLog({ ...baseLog, timestamp: new Date().toISOString().slice(0, 19), decision: "allow", reason, latency_ms: 0 });
+    allow(reason, eventName);
     return;
   }
 
-  // 3. それ以外 → allow
-  const reason = "静的ルール対象外 → 承認";
-  writeLog({
-    ...baseLog,
-    timestamp: new Date().toISOString().slice(0, 19),
-    decision: "allow",
-    reason,
-    latency_ms: 0,
-  });
-  allow(reason, eventName);
+  if (hasRecentGatekeeperCall()) {
+    const reason = "/gatekeeper 評価済み（30分以内）→ 承認";
+    writeLog({ ...baseLog, timestamp: new Date().toISOString().slice(0, 19), decision: "allow", reason, latency_ms: 0 });
+    allow(reason, eventName);
+  } else {
+    const reason = "/gatekeeper 未評価 → deny";
+    writeLog({ ...baseLog, timestamp: new Date().toISOString().slice(0, 19), decision: "block", reason, latency_ms: 0 });
+    block(reason, eventName, "/gatekeeper を起動して評価してから再実行してください");
+  }
 }
 
 main().catch((err: Error) => {
