@@ -8,7 +8,9 @@
  *   0.2  per-project allow patterns → 即 allow
  *   0.3  debug/* ブランチ → 全操作を即 allow
  *   1.   readonly_tools.json に登録済み → 即 allow
- *   2.   それ以外 → allow（LLM 判定は /gatekeeper スキルが Claude 側で担う）
+ *   2.   リスクある Bash 操作（git push / curl 書き込み等）かつ /gatekeeper 未評価 → block
+ *   2.1  同上かつ /gatekeeper 評価済み（30分以内） → allow
+ *   3.   それ以外 → allow
  *
  * PermissionRequest イベントでも同じ判定ロジックを使い、ネイティブ確認ダイアログを抑制する。
  *
@@ -25,9 +27,11 @@ import {
 } from "fs";
 import { homedir } from "os";
 import { isAbsolute, join } from "path";
+import { readEvents } from "./event-log.ts";
 
 const LOG_PATH = join(homedir(), ".claude", "gatekeeper-log.jsonl");
 const LOG_MAX_BYTES = 10 * 1024 * 1024; // 10MB
+const GATEKEEPER_TTL_MS = 30 * 60 * 1000; // 30分以内の /gatekeeper 呼び出しを有効とみなす
 
 interface HookInput {
   hook_event_name?: string;
@@ -165,6 +169,35 @@ const NEVER_READONLY: ReadonlySet<string> = new Set([
   "Monitor",
 ]);
 
+// git push / curl 書き込み操作 — /gatekeeper による事前評価が必要なパターン
+const RISKY_BASH_PATTERNS: ReadonlyArray<RegExp> = [
+  /\bgit\s+push\b/,
+  /\bcurl\b.*\s-X\s+(POST|PUT|DELETE|PATCH)\b/i,
+  /\bcurl\b.*--request\s+(POST|PUT|DELETE|PATCH)\b/i,
+  /\bcurl\b.*\s--data\b/i,
+  /\bcurl\b.*\s-d\s/,
+];
+
+function isRiskyBashCommand(cmd: string): boolean {
+  return RISKY_BASH_PATTERNS.some((p) => p.test(cmd));
+}
+
+function hasRecentGatekeeperCall(sessionId: string): boolean {
+  if (!sessionId) return false;
+  try {
+    const events = readEvents(sessionId);
+    const now = Date.now();
+    return events.some(
+      (e) =>
+        e.kind === "skill_start" &&
+        e.skill === "gatekeeper" &&
+        now - new Date(e.ts).getTime() < GATEKEEPER_TTL_MS,
+    );
+  } catch {
+    return false; // fail-open: ログ読み取り失敗時はブロックしない
+  }
+}
+
 function loadBashAllowPatterns(cwd?: string): string[] {
   const claudeDir = projectClaudeDir(cwd);
   if (!claudeDir) return [];
@@ -192,43 +225,23 @@ function loadReadonlyTools(cwd?: string): Set<string> {
   }
 }
 
-function allow(reason: string, eventName = "PreToolUse"): void {
-  const output =
+function allow(reason: string, eventName = "PreToolUse", additionalContext?: string): void {
+  const hookOutput: Record<string, unknown> =
     eventName === "PermissionRequest"
-      ? {
-          hookSpecificOutput: {
-            hookEventName: "PermissionRequest",
-            decision: { behavior: "allow" },
-          },
-        }
-      : {
-          hookSpecificOutput: {
-            hookEventName: "PreToolUse",
-            permissionDecision: "allow",
-            permissionDecisionReason: reason,
-          },
-        };
-  process.stdout.write(JSON.stringify(output) + "\n");
+      ? { hookEventName: "PermissionRequest", decision: { behavior: "allow" } }
+      : { hookEventName: "PreToolUse", permissionDecision: "allow", permissionDecisionReason: reason };
+  if (additionalContext) hookOutput.additionalContext = additionalContext;
+  process.stdout.write(JSON.stringify({ hookSpecificOutput: hookOutput }) + "\n");
   process.exit(0);
 }
 
-function block(reason: string, eventName = "PreToolUse"): void {
-  const output =
+function block(reason: string, eventName = "PreToolUse", additionalContext?: string): void {
+  const hookOutput: Record<string, unknown> =
     eventName === "PermissionRequest"
-      ? {
-          hookSpecificOutput: {
-            hookEventName: "PermissionRequest",
-            decision: { behavior: "deny" },
-          },
-        }
-      : {
-          hookSpecificOutput: {
-            hookEventName: "PreToolUse",
-            permissionDecision: "deny",
-            permissionDecisionReason: reason,
-          },
-        };
-  process.stdout.write(JSON.stringify(output) + "\n");
+      ? { hookEventName: "PermissionRequest", decision: { behavior: "deny" } }
+      : { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: reason };
+  if (additionalContext) hookOutput.additionalContext = additionalContext;
+  process.stdout.write(JSON.stringify({ hookSpecificOutput: hookOutput }) + "\n");
   process.exit(0);
 }
 
@@ -338,8 +351,22 @@ async function main(): Promise<void> {
     return;
   }
 
-  // 2. それ以外 → allow（LLM 判定は /gatekeeper スキルが Claude 側で担う）
-  const reason = "静的ルール対象外 → /gatekeeper スキルによる事前評価を信頼して自動承認";
+  // 2. リスクある Bash 操作 — /gatekeeper 評価が必要
+  if (toolName === "Bash" && isRiskyBashCommand(String(toolInput.command ?? ""))) {
+    if (hasRecentGatekeeperCall(data.session_id ?? "")) {
+      const reason = "/gatekeeper 評価済み（30分以内）→ 承認";
+      writeLog({ ...baseLog, timestamp: new Date().toISOString().slice(0, 19), decision: "allow", reason, latency_ms: 0 });
+      allow(reason, eventName);
+    } else {
+      const reason = `要 /gatekeeper 評価: ${summary.slice(0, 80)}`;
+      writeLog({ ...baseLog, timestamp: new Date().toISOString().slice(0, 19), decision: "block", reason, latency_ms: 0 });
+      block(reason, eventName, "/gatekeeper を起動して評価してから再実行してください");
+    }
+    return;
+  }
+
+  // 3. それ以外 → allow
+  const reason = "静的ルール対象外 → 承認";
   writeLog({
     ...baseLog,
     timestamp: new Date().toISOString().slice(0, 19),

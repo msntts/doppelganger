@@ -133,28 +133,24 @@ lockfile（`pnpm-lock.yaml` / `uv.lock`）は必ずコミットする。`.gitign
 `/execute` スキル経由かどうか、変更規模の大小に関わらず適用する。
 （`/execute` 内の `[REVIEW]` フェーズ完了時の自動レビューとは別に、毎コミット直前にも実行する）
 
-### Gatekeeper（ツール実行前の自己評価）
-以下に該当しない操作を実行する前に、`gatekeeper` スキルで安全性を自己評価してから進む。
+### Gatekeeper（リスク操作の強制評価）
 
-**評価不要（明らかに安全）:**
-- ファイル読み取り（Read・Bash の cat/grep/find/ls 等）
-- git status / log / diff / fetch / pull
-- ローカル git 操作（add・commit）
-- git管理ファイルの操作全般。ロールバックできるため.claude以下でも安全とみなす
+`gatekeeper.ts` hook が `git push` や `curl` の書き込み操作を自動検出し、
+`/gatekeeper` スキルで評価していない場合はブロックして起動を促す。
 
-**評価が必要（`/gatekeeper` を呼ぶ）:**
-- 外部 API・サービスへの書き込み
-- git push / デプロイ操作
-- git 管理外のファイルへの書き込み（~/.ssh/ 等）
-- rm / rmdir（git 管理外のパスが含まれる場合）
+**ブロックされたら:**
+1. `/gatekeeper` を起動して安全性を評価する
+2. 評価結果に従う:
+   - `allow` → 操作を再実行（hook が通す）
+   - `ask` → ユーザーに確認してから再実行
+   - `block` → 実行しない。理由をユーザーに伝える
 
-`/gatekeeper` が `ask` を推奨 → ユーザーに確認を求めてから実行する。
-`/gatekeeper` が `block` を推奨 → 実行しない。理由をユーザーに伝える。
+**30分以内に `/gatekeeper` を呼び出し済みの場合、hook は自動的に通す。**
 
 ### Tune（承認ルールのチューニング）
 
 `/tune` は project-local の `.claude/allow_patterns.json` と `.claude/denied_patterns.json` を育てるスキル。
-gatekeeper が「静的ルール対象外 → LLM 判定を信頼して自動承認」した過去の Bash コマンドや、
+gatekeeper が「静的ルール対象外 → 承認」した過去の Bash コマンドや、
 observer が rejection と判定したコマンドパターンを分析し、候補をユーザーに提示する。
 
 **`fewer-permission-prompts` との使い分け:**
