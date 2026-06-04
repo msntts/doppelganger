@@ -21,9 +21,9 @@ const LOG_MAX_BYTES = 500 * 1024;
 const LOG_BACKUPS = 2;
 const TTL_MS = 60 * 60 * 1000; // 60分
 
-const REJECTION_RE = /却下|やり直し|違う|だめ|NG|使えない|別の/i;
-const MODIFICATION_RE = /でも|ただし|修正|変えて|直して|追加して|ただ(?!し)|一方で/;
-const APPROVAL_RE = /OK|ok|了解|承認|進めて|続けて|問題ない|大丈夫|いいです|そうです|はい/;
+const REJECTION_RE = /却下|やり直し|やりなおし|なおして|直して|違う|だめ|NG|使えない|別の/i;
+const MODIFICATION_RE = /でも|ただし|修正|変えて|追加して|ただ(?!し)|一方で/;
+const APPROVAL_RE = /OK|ok|了解|承認|進めて?|進め|すすめ|続けて?|続け|問題ない|大丈夫|いいです|そうです|はい|お願いします?|おねがい|コミットして|pushして|push して/;
 
 type ResponseType = "approval" | "modification" | "rejection" | "unclear";
 
