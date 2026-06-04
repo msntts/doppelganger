@@ -46,6 +46,15 @@
         ]
       },
       {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "tsx ~/.claude/hooks/check-rm-safety.ts"
+          }
+        ]
+      },
+      {
         "matcher": "mcp__.*",
         "hooks": [
           {
