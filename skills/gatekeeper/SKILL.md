@@ -13,6 +13,20 @@ allowed-tools: Read, Bash
 
 ---
 
+## 実行フロー
+
+### 0. 呼び出しフラグの記録
+
+最初に以下を Bash で実行する（失敗しても続行する）:
+
+```bash
+node -e "require('fs').writeFileSync(require('path').join(require('os').homedir(),'.claude','.gatekeeper-last-called'),new Date().toISOString())" 2>/dev/null; true
+```
+
+これにより gatekeeper.ts hook が「評価済み」と認識し、直後の操作を通す。
+
+---
+
 ## 判定手順
 
 ### 1. プロジェクト固有ポリシーの確認

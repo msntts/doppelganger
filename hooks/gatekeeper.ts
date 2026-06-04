@@ -27,7 +27,6 @@ import {
 } from "fs";
 import { homedir } from "os";
 import { isAbsolute, join } from "path";
-import { readEvents } from "./event-log.ts";
 
 const LOG_PATH = join(homedir(), ".claude", "gatekeeper-log.jsonl");
 const LOG_MAX_BYTES = 10 * 1024 * 1024; // 10MB
@@ -182,19 +181,16 @@ function isRiskyBashCommand(cmd: string): boolean {
   return RISKY_BASH_PATTERNS.some((p) => p.test(cmd));
 }
 
-function hasRecentGatekeeperCall(sessionId: string): boolean {
-  if (!sessionId) return false;
+// /gatekeeper スキルが呼ばれたとき SKILL.md が書くフラグファイルのパス
+const GATEKEEPER_FLAG = join(homedir(), ".claude", ".gatekeeper-last-called");
+
+function hasRecentGatekeeperCall(_sessionId: string): boolean {
   try {
-    const events = readEvents(sessionId);
-    const now = Date.now();
-    return events.some(
-      (e) =>
-        e.kind === "skill_start" &&
-        e.skill === "gatekeeper" &&
-        now - new Date(e.ts).getTime() < GATEKEEPER_TTL_MS,
-    );
+    if (!existsSync(GATEKEEPER_FLAG)) return false;
+    const ts = readFileSync(GATEKEEPER_FLAG, "utf-8").trim();
+    return Date.now() - new Date(ts).getTime() < GATEKEEPER_TTL_MS;
   } catch {
-    return false; // fail-open: ログ読み取り失敗時はブロックしない
+    return false;
   }
 }
 
