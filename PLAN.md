@@ -72,7 +72,7 @@ work-logger / caffeinate / check-rm-safety の 8 hook に適用する。
 
 ---
 
-### [ ] Task 4: hooks/archive-log.ts 抽出 — rotateLog + appendArchive の共通化
+### [x] Task 4: hooks/archive-log.ts 抽出 — rotateLog + appendArchive の共通化
 
 **背景**: observer-prompt・observer-agent・work-logger に `rotateLog(500KB/2-gen)` の完全同一コピーが 3 つ。
 observer-prompt と observer-agent では homedir JSONL への append も重複。
