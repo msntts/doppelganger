@@ -40,6 +40,16 @@ fi
 MSYS=winsymlinks:nativestrict ln -s "$SCRIPT_DIR/hooks" "$CLAUDE_DIR/hooks"
 echo "  hooks/ のシンボリックリンクを作成しました"
 
+# --- scripts/ ---
+if [ -L "$CLAUDE_DIR/scripts" ]; then
+  rm "$CLAUDE_DIR/scripts"
+elif [ -d "$CLAUDE_DIR/scripts" ]; then
+  mv "$CLAUDE_DIR/scripts" "$CLAUDE_DIR/scripts.bak"
+  echo "  既存の scripts/ を scripts.bak/ にバックアップしました"
+fi
+MSYS=winsymlinks:nativestrict ln -s "$SCRIPT_DIR/scripts" "$CLAUDE_DIR/scripts"
+echo "  scripts/ のシンボリックリンクを作成しました"
+
 # --- skills/ ---
 if [ -L "$CLAUDE_DIR/skills" ]; then
   rm "$CLAUDE_DIR/skills"

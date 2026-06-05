@@ -101,7 +101,7 @@ git diff HEAD
 `<VERDICT>` は判定結果に応じて `要修正` / `要確認` / `問題なし` に置き換える。
 
 ```bash
-tsx hooks/log-observer.ts review_verdict <VERDICT>
+tsx ~/.claude/scripts/log-observer.ts review_verdict <VERDICT>
 ```
 
 ---

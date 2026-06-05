@@ -1,5 +1,5 @@
 #!/usr/bin/env tsx
-// Usage: tsx hooks/log-observer.ts <event_type> <verdict>
+// CLI script called by skills (not a hook). Usage: tsx ~/.claude/scripts/log-observer.ts <event_type> <verdict>
 import { appendFileSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
