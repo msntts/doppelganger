@@ -9,6 +9,7 @@ import { appendFileSync, existsSync, renameSync, statSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 import { appendEvent } from "./event-log.ts";
+import { readHookInput } from "./hook-io.ts";
 
 const LOG_PATH = join(homedir(), ".claude", "observer-log.jsonl");
 const LOG_MAX_BYTES = 500 * 1024;
@@ -32,20 +33,18 @@ function rotateLog(): void {
 }
 
 async function main(): Promise<void> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of process.stdin) {
-    chunks.push(chunk as Buffer);
-  }
-
   try {
-    const data = JSON.parse(Buffer.concat(chunks).toString("utf-8"));
+    const data = await readHookInput<Record<string, unknown>>();
 
     if (data.tool_name !== "Agent") {
       process.exit(0);
     }
 
     const sessionId: string = data.session_id ?? "";
-    const description = String(data.tool_input?.description ?? "").slice(0, 100);
+    const description = String(data.tool_input?.description ?? "").slice(
+      0,
+      100,
+    );
     const cwd = process.cwd();
 
     // IPC event log

@@ -8,6 +8,7 @@
 import { appendFileSync, existsSync, renameSync, statSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
+import { readHookInput } from "./hook-io.ts";
 
 const LOG_TOOLS = new Set(["Write", "Edit", "NotebookEdit", "Bash"]);
 const LOG_PATH = join(homedir(), ".claude", "work-log.jsonl");
@@ -24,12 +25,7 @@ function rotateLog(): void {
 }
 
 async function main(): Promise<void> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of process.stdin) {
-    chunks.push(chunk as Buffer);
-  }
-
-  const data = JSON.parse(Buffer.concat(chunks).toString("utf-8"));
+  const data = await readHookInput<Record<string, unknown>>();
   const toolName: string = data.tool_name ?? "";
 
   if (!LOG_TOOLS.has(toolName)) {

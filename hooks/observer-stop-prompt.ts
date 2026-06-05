@@ -4,6 +4,7 @@
  */
 
 import { type SessionEvent, readEvents } from "./event-log.ts";
+import { readHookInput } from "./hook-io.ts";
 
 const TTL_MS = 60 * 60 * 1000;
 
@@ -30,13 +31,8 @@ function findPendingSkill(events: SessionEvent[], now: Date): string | null {
 }
 
 async function main(): Promise<void> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of process.stdin) {
-    chunks.push(chunk as Buffer);
-  }
-
   try {
-    const data = JSON.parse(Buffer.concat(chunks).toString("utf-8"));
+    const data = await readHookInput<{ session_id?: string }>();
     const sessionId: string = data.session_id ?? "";
 
     const events = readEvents(sessionId);

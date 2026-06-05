@@ -14,6 +14,7 @@
 import { realpathSync } from "fs";
 import { homedir } from "os";
 import { dirname, basename, resolve } from "path";
+import { readHookInput } from "./hook-io.ts";
 
 interface HookInput {
   tool_name: string;
@@ -23,11 +24,16 @@ interface HookInput {
 
 // /tmp の実パスをモジュールロード時に解決（macOS では /private/tmp になる）
 const REAL_TMP = (() => {
-  try { return realpathSync("/tmp"); } catch { return "/tmp"; }
+  try {
+    return realpathSync("/tmp");
+  } catch {
+    return "/tmp";
+  }
 })();
 
 function resolveAbsPath(p: string, cwd: string): string {
-  const expanded = p === "~" ? homedir() : p.startsWith("~/") ? homedir() + p.slice(1) : p;
+  const expanded =
+    p === "~" ? homedir() : p.startsWith("~/") ? homedir() + p.slice(1) : p;
   const logical = resolve(cwd, expanded);
   // ファイルが存在すればそのまま展開、存在しなければ親ディレクトリを展開して結合
   // （例: /tmp/newfile → 親 /tmp → /private/tmp → /private/tmp/newfile）
@@ -55,9 +61,11 @@ function normalizeCwd(cwd: string): string {
 
 function stripQuotes(s: string): string {
   // シングル・ダブルクォートで囲まれている場合のみ除去
-  if (s.length >= 2 &&
-      ((s.startsWith("'") && s.endsWith("'")) ||
-       (s.startsWith('"') && s.endsWith('"')))) {
+  if (
+    s.length >= 2 &&
+    ((s.startsWith("'") && s.endsWith("'")) ||
+      (s.startsWith('"') && s.endsWith('"')))
+  ) {
     return s.slice(1, -1);
   }
   return s;
@@ -100,7 +108,8 @@ function isAllowed(absPath: string, cwd: string): boolean {
 
 function outputBlock(rawPath: string, resolvedPath: string, cwd: string): void {
   // reason を組み立ててから JSON.stringify に渡すことで特殊文字を確実にエスケープする
-  const reason = `rm パス ${JSON.stringify(rawPath)} が ${JSON.stringify(resolvedPath)} に解決されました。` +
+  const reason =
+    `rm パス ${JSON.stringify(rawPath)} が ${JSON.stringify(resolvedPath)} に解決されました。` +
     `許可ゾーン外（CWD: ${cwd} および /tmp 以外）への削除はブロックされます。`;
   const output = {
     hookSpecificOutput: {
@@ -114,14 +123,9 @@ function outputBlock(rawPath: string, resolvedPath: string, cwd: string): void {
 }
 
 async function main(): Promise<void> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of process.stdin) {
-    chunks.push(chunk as Buffer);
-  }
-
   let data: HookInput;
   try {
-    data = JSON.parse(Buffer.concat(chunks).toString("utf-8"));
+    data = await readHookInput<HookInput>();
   } catch {
     process.exit(0);
   }

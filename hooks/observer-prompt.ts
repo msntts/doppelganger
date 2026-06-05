@@ -18,6 +18,7 @@ import {
   appendEvent,
   readEvents,
 } from "./event-log.ts";
+import { readHookInput } from "./hook-io.ts";
 
 const LOG_PATH = join(homedir(), ".claude", "observer-log.jsonl");
 const LOG_MAX_BYTES = 500 * 1024;
@@ -57,7 +58,11 @@ function findPrecedingSkill(
     if (ev.kind === "skill_start") {
       const elapsed = now.getTime() - new Date(ev.ts).getTime();
       if (elapsed > TTL_MS) return null;
-      return { skill: ev.skill, ts: ev.ts, elapsedSec: Math.round(elapsed / 1000) };
+      return {
+        skill: ev.skill,
+        ts: ev.ts,
+        elapsedSec: Math.round(elapsed / 1000),
+      };
     }
     // agent_invoked: skip
   }
@@ -74,13 +79,8 @@ function rotateLog(): void {
 }
 
 async function main(): Promise<void> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of process.stdin) {
-    chunks.push(chunk as Buffer);
-  }
-
   try {
-    const data = JSON.parse(Buffer.concat(chunks).toString("utf-8"));
+    const data = await readHookInput<Record<string, unknown>>();
     const sessionId: string = data.session_id ?? "";
     const prompt: string = data.prompt ?? "";
     const now = new Date();
@@ -94,10 +94,7 @@ async function main(): Promise<void> {
       : "autonomous";
 
     // 2. Append user_response
-    const userEvent: Omit<
-      import("./event-log.ts").UserResponseEvent,
-      "ts"
-    > = {
+    const userEvent: Omit<import("./event-log.ts").UserResponseEvent, "ts"> = {
       kind: "user_response",
       session_id: sessionId,
       human_attribution: humanAttribution,

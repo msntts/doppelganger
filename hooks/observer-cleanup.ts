@@ -7,15 +7,11 @@
 
 import { existsSync } from "fs";
 import { eventLogPath, trimLog } from "./event-log.ts";
+import { readHookInput } from "./hook-io.ts";
 
 async function main(): Promise<void> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of process.stdin) {
-    chunks.push(chunk as Buffer);
-  }
-
   try {
-    const data = JSON.parse(Buffer.concat(chunks).toString("utf-8"));
+    const data = await readHookInput<{ session_id?: string }>();
     const sessionId: string = data.session_id ?? "";
     const path = eventLogPath(sessionId);
     if (existsSync(path)) {

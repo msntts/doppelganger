@@ -10,6 +10,7 @@
 
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from "fs";
 import { spawn } from "child_process";
+import { readHookInput } from "./hook-io.ts";
 
 const PID_FILE = "/tmp/claude_caffeinate.pid";
 
@@ -47,17 +48,16 @@ function stop(): void {
   } catch {
     // プロセスが既に終了していれば無視
   } finally {
-    try { unlinkSync(PID_FILE); } catch { /* ignore */ }
+    try {
+      unlinkSync(PID_FILE);
+    } catch {
+      /* ignore */
+    }
   }
 }
 
 async function main(): Promise<void> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of process.stdin) {
-    chunks.push(chunk as Buffer);
-  }
-
-  const data = JSON.parse(Buffer.concat(chunks).toString("utf-8"));
+  const data = await readHookInput<Record<string, unknown>>();
   const event: string = data.hook_event_name ?? data.hookEventName ?? "";
 
   if (event === "Stop") {

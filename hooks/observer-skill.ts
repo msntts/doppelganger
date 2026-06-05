@@ -4,15 +4,11 @@
  */
 
 import { appendEvent } from "./event-log.ts";
+import { readHookInput } from "./hook-io.ts";
 
 async function main(): Promise<void> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of process.stdin) {
-    chunks.push(chunk as Buffer);
-  }
-
   try {
-    const data = JSON.parse(Buffer.concat(chunks).toString("utf-8"));
+    const data = await readHookInput<Record<string, unknown>>();
 
     if (data.tool_name !== "Skill") {
       process.exit(0);
