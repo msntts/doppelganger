@@ -29,6 +29,7 @@ import {
 import { homedir } from "os";
 import { isAbsolute, join } from "path";
 import { appendEvent, readEvents } from "./event-log.ts";
+import { readHookInput } from "./hook-io.ts";
 
 const LOG_PATH = join(homedir(), ".claude", "gatekeeper-log.jsonl");
 const LOG_MAX_BYTES = 10 * 1024 * 1024; // 10MB
@@ -251,12 +252,7 @@ function block(
 }
 
 async function main(): Promise<void> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of process.stdin) {
-    chunks.push(chunk as Buffer);
-  }
-
-  const data: HookInput = JSON.parse(Buffer.concat(chunks).toString("utf-8"));
+  const data: HookInput = await readHookInput<HookInput>();
   const eventName = data.hook_event_name ?? "PreToolUse";
   const toolName = data.tool_name;
   const toolInput = data.tool_input ?? {};
