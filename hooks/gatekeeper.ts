@@ -242,9 +242,9 @@ function block(
       : {
           hookEventName: "PreToolUse",
           permissionDecision: "deny",
+          permissionDecisionReason: reason,
         };
   if (additionalContext) hookOutput.additionalContext = additionalContext;
-  process.stderr.write(reason + "\n");
   process.stdout.write(
     JSON.stringify({ hookSpecificOutput: hookOutput }) + "\n",
   );
