@@ -28,7 +28,6 @@ import {
 } from "fs";
 import { homedir } from "os";
 import { isAbsolute, join } from "path";
-import { readEvents, appendEvent } from "./event-log.ts";
 
 const LOG_PATH = join(homedir(), ".claude", "gatekeeper-log.jsonl");
 const LOG_MAX_BYTES = 10 * 1024 * 1024; // 10MB
@@ -171,21 +170,13 @@ const NEVER_READONLY: ReadonlySet<string> = new Set([
   "Monitor",
 ]);
 
-function hasRecentGatekeeperCall(sessionId: string): boolean {
+function hasRecentGatekeeperCall(): boolean {
   try {
-    const cutoff = Date.now() - GATEKEEPER_TTL_MS;
-    if (
-      existsSync(GATEKEEPER_FLAG) &&
+    if (!existsSync(GATEKEEPER_FLAG)) return false;
+    return (
       Date.now() -
         new Date(readFileSync(GATEKEEPER_FLAG, "utf-8").trim()).getTime() <
-        GATEKEEPER_TTL_MS
-    )
-      return true;
-    return readEvents(sessionId).some(
-      (e) =>
-        e.kind === "skill_start" &&
-        e.skill === "gatekeeper" &&
-        new Date(e.ts).getTime() >= cutoff,
+      GATEKEEPER_TTL_MS
     );
   } catch {
     return false;
@@ -318,15 +309,6 @@ async function main(): Promise<void> {
   if (toolName === "Skill" && String(toolInput.skill ?? "") === "gatekeeper") {
     const reason = "/gatekeeper スキル自体は除外 → 自動承認";
     try {
-      appendEvent(data.session_id ?? "", {
-        kind: "skill_start",
-        session_id: data.session_id ?? "",
-        skill: "gatekeeper",
-        args: null,
-        source: "claude_tool",
-      });
-    } catch {}
-    try {
       writeFileSync(GATEKEEPER_FLAG, new Date().toISOString(), "utf-8");
     } catch {}
     writeLog({
@@ -408,7 +390,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (hasRecentGatekeeperCall(data.session_id ?? "")) {
+  if (hasRecentGatekeeperCall()) {
     const reason = "/gatekeeper 評価済み（30分以内）→ 承認";
     writeLog({
       ...baseLog,
