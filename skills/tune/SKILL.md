@@ -29,7 +29,7 @@ allowed-tools:
 Bash ツールで tune-helper を実行する:
 
 ```bash
-tsx ~/.claude/scripts/tune-helper.ts --project $(pwd) 2>/dev/null || npx --yes tsx ~/.claude/scripts/tune-helper.ts --project $(pwd) 2>/dev/null
+tsx ~/.claude/skills/tune/scripts/tune-helper.ts --project $(pwd) 2>/dev/null || npx --yes tsx ~/.claude/skills/tune/scripts/tune-helper.ts --project $(pwd) 2>/dev/null
 ```
 
 出力 JSON をパースする:
