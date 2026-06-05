@@ -42,7 +42,6 @@ interface HookInput {
 }
 
 interface LogEntry {
-  timestamp: string;
   session_id: string;
   tool: string;
   input_summary: string;
@@ -76,7 +75,12 @@ function writeLog(entry: LogEntry): void {
     if (existsSync(LOG_PATH) && statSync(LOG_PATH).size >= LOG_MAX_BYTES) {
       renameSync(LOG_PATH, LOG_PATH + ".1");
     }
-    appendFileSync(LOG_PATH, JSON.stringify(entry) + "\n", "utf-8");
+    const ts = new Date().toISOString().slice(0, 19);
+    appendFileSync(
+      LOG_PATH,
+      JSON.stringify({ timestamp: ts, ...entry }) + "\n",
+      "utf-8",
+    );
   } catch {
     // ログ失敗はサイレントに無視
   }
@@ -273,7 +277,6 @@ async function main(): Promise<void> {
   if (deniedReason) {
     writeLog({
       ...baseLog,
-      timestamp: new Date().toISOString().slice(0, 19),
       decision: "block",
       reason: deniedReason,
       latency_ms: 0,
@@ -292,7 +295,6 @@ async function main(): Promise<void> {
       const reason = "git add/commit (ローカル・--no-verify なし) → 自動承認";
       writeLog({
         ...baseLog,
-        timestamp: new Date().toISOString().slice(0, 19),
         decision: "allow",
         reason,
         latency_ms: 0,
@@ -319,7 +321,6 @@ async function main(): Promise<void> {
     }
     writeLog({
       ...baseLog,
-      timestamp: new Date().toISOString().slice(0, 19),
       decision: "allow",
       reason,
       latency_ms: 0,
@@ -340,7 +341,6 @@ async function main(): Promise<void> {
       const reason = `allow_patterns match: "${matchedPattern}" → 自動承認`;
       writeLog({
         ...baseLog,
-        timestamp: new Date().toISOString().slice(0, 19),
         decision: "allow",
         reason,
         latency_ms: 0,
@@ -356,7 +356,6 @@ async function main(): Promise<void> {
     const reason = `debug/* ブランチのため自動承認 (branch: ${branch})`;
     writeLog({
       ...baseLog,
-      timestamp: new Date().toISOString().slice(0, 19),
       decision: "allow",
       reason,
       latency_ms: 0,
@@ -370,7 +369,6 @@ async function main(): Promise<void> {
     const reason = `${toolName}: readonly_tools に登録済みのため自動承認`;
     writeLog({
       ...baseLog,
-      timestamp: new Date().toISOString().slice(0, 19),
       decision: "allow",
       reason,
       latency_ms: 0,
@@ -387,7 +385,6 @@ async function main(): Promise<void> {
       "静的ルール対象外 → PermissionRequest allow（ダイアログ抑制）";
     writeLog({
       ...baseLog,
-      timestamp: new Date().toISOString().slice(0, 19),
       decision: "allow",
       reason,
       latency_ms: 0,
@@ -400,7 +397,6 @@ async function main(): Promise<void> {
     const reason = "/gatekeeper 評価済み → 承認";
     writeLog({
       ...baseLog,
-      timestamp: new Date().toISOString().slice(0, 19),
       decision: "allow",
       reason,
       latency_ms: 0,
@@ -410,7 +406,6 @@ async function main(): Promise<void> {
     const reason = "gatekeeper: 実行前に /gatekeeper の評価が必要";
     writeLog({
       ...baseLog,
-      timestamp: new Date().toISOString().slice(0, 19),
       decision: "block",
       reason,
       latency_ms: 0,
@@ -421,7 +416,6 @@ async function main(): Promise<void> {
 
 main().catch((err: Error) => {
   writeLog({
-    timestamp: new Date().toISOString().slice(0, 19),
     session_id: "",
     tool: "unknown",
     input_summary: "",
