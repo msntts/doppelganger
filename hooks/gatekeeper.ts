@@ -32,8 +32,8 @@ import { readEvents, appendEvent } from "./event-log.ts";
 
 const LOG_PATH = join(homedir(), ".claude", "gatekeeper-log.jsonl");
 const LOG_MAX_BYTES = 10 * 1024 * 1024; // 10MB
-const GATEKEEPER_TTL_MS = 30 *60 * 1000;
-const GATEKEEPER_FLAG = join(homedir(), ".claude",".gatekeeper-last-called");
+const GATEKEEPER_TTL_MS = 30 * 60 * 1000;
+const GATEKEEPER_FLAG = join(homedir(), ".claude", ".gatekeeper-last-called");
 
 interface HookInput {
   hook_event_name?: string;
@@ -171,14 +171,16 @@ const NEVER_READONLY: ReadonlySet<string> = new Set([
   "Monitor",
 ]);
 
-
 function hasRecentGatekeeperCall(sessionId: string): boolean {
   try {
     const cutoff = Date.now() - GATEKEEPER_TTL_MS;
     if (
       existsSync(GATEKEEPER_FLAG) &&
-      Date.now() - new Date(readFileSync(GATEKEEPER_FLAG, "utf-8").trim()).getTime() < GATEKEEPER_TTL_MS
-    ) return true;
+      Date.now() -
+        new Date(readFileSync(GATEKEEPER_FLAG, "utf-8").trim()).getTime() <
+        GATEKEEPER_TTL_MS
+    )
+      return true;
     return readEvents(sessionId).some(
       (e) =>
         e.kind === "skill_start" &&
@@ -217,23 +219,43 @@ function loadReadonlyTools(cwd?: string): Set<string> {
   }
 }
 
-function allow(reason: string, eventName = "PreToolUse", additionalContext?: string): void {
+function allow(
+  reason: string,
+  eventName = "PreToolUse",
+  additionalContext?: string,
+): void {
   const hookOutput: Record<string, unknown> =
     eventName === "PermissionRequest"
       ? { hookEventName: "PermissionRequest", decision: { behavior: "allow" } }
-      : { hookEventName: "PreToolUse", permissionDecision: "allow", permissionDecisionReason: reason };
+      : {
+          hookEventName: "PreToolUse",
+          permissionDecision: "allow",
+          permissionDecisionReason: reason,
+        };
   if (additionalContext) hookOutput.additionalContext = additionalContext;
-  process.stdout.write(JSON.stringify({ hookSpecificOutput: hookOutput }) + "\n");
+  process.stdout.write(
+    JSON.stringify({ hookSpecificOutput: hookOutput }) + "\n",
+  );
   process.exit(0);
 }
 
-function block(reason: string, eventName = "PreToolUse", additionalContext?: string): void {
+function block(
+  reason: string,
+  eventName = "PreToolUse",
+  additionalContext?: string,
+): void {
   const hookOutput: Record<string, unknown> =
     eventName === "PermissionRequest"
       ? { hookEventName: "PermissionRequest", decision: { behavior: "deny" } }
-      : { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: reason };
+      : {
+          hookEventName: "PreToolUse",
+          permissionDecision: "deny",
+          permissionDecisionReason: reason,
+        };
   if (additionalContext) hookOutput.additionalContext = additionalContext;
-  process.stdout.write(JSON.stringify({ hookSpecificOutput: hookOutput }) + "\n");
+  process.stdout.write(
+    JSON.stringify({ hookSpecificOutput: hookOutput }) + "\n",
+  );
   process.exit(0);
 }
 
@@ -295,9 +317,25 @@ async function main(): Promise<void> {
   // 0.1.5. /gatekeeper スキル自体は常に allow（自己ブロック防止）
   if (toolName === "Skill" && String(toolInput.skill ?? "") === "gatekeeper") {
     const reason = "/gatekeeper スキル自体は除外 → 自動承認";
-    try { appendEvent(data.session_id ?? "", { kind: "skill_start", session_id: data.session_id ?? "", skill: "gatekeeper", args: null, source: "claude_tool" }); } catch {}
-    try { writeFileSync(GATEKEEPER_FLAG, new Date().toISOString(), "utf-8"); } catch {}
-    writeLog({ ...baseLog, timestamp: new Date().toISOString().slice(0, 19), decision: "allow", reason, latency_ms: 0 });
+    try {
+      appendEvent(data.session_id ?? "", {
+        kind: "skill_start",
+        session_id: data.session_id ?? "",
+        skill: "gatekeeper",
+        args: null,
+        source: "claude_tool",
+      });
+    } catch {}
+    try {
+      writeFileSync(GATEKEEPER_FLAG, new Date().toISOString(), "utf-8");
+    } catch {}
+    writeLog({
+      ...baseLog,
+      timestamp: new Date().toISOString().slice(0, 19),
+      decision: "allow",
+      reason,
+      latency_ms: 0,
+    });
     allow(reason, eventName);
     return;
   }
@@ -357,20 +395,43 @@ async function main(): Promise<void> {
   //   PermissionRequest: 常に allow（ネイティブダイアログ抑制）
   //   PreToolUse: /gatekeeper 評価済みなら allow、未評価なら deny
   if (eventName === "PermissionRequest") {
-    const reason = "静的ルール対象外 → PermissionRequest allow（ダイアログ抑制）";
-    writeLog({ ...baseLog, timestamp: new Date().toISOString().slice(0, 19), decision: "allow", reason, latency_ms: 0 });
+    const reason =
+      "静的ルール対象外 → PermissionRequest allow（ダイアログ抑制）";
+    writeLog({
+      ...baseLog,
+      timestamp: new Date().toISOString().slice(0, 19),
+      decision: "allow",
+      reason,
+      latency_ms: 0,
+    });
     allow(reason, eventName);
     return;
   }
 
-  if (hasRecentGatekeeperCall(data.session_id?? "")) {
+  if (hasRecentGatekeeperCall(data.session_id ?? "")) {
     const reason = "/gatekeeper 評価済み（30分以内）→ 承認";
-    writeLog({ ...baseLog, timestamp: new Date().toISOString().slice(0, 19), decision: "allow", reason, latency_ms: 0 });
+    writeLog({
+      ...baseLog,
+      timestamp: new Date().toISOString().slice(0, 19),
+      decision: "allow",
+      reason,
+      latency_ms: 0,
+    });
     allow(reason, eventName);
   } else {
     const reason = "/gatekeeper 未評価 → deny";
-    writeLog({ ...baseLog, timestamp: new Date().toISOString().slice(0, 19), decision: "block", reason, latency_ms: 0 });
-    block(reason, eventName, "/gatekeeper を起動して評価してから再実行してください");
+    writeLog({
+      ...baseLog,
+      timestamp: new Date().toISOString().slice(0, 19),
+      decision: "block",
+      reason,
+      latency_ms: 0,
+    });
+    block(
+      reason,
+      eventName,
+      "/gatekeeper を起動して評価してから再実行してください",
+    );
   }
 }
 

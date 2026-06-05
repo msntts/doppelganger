@@ -11,6 +11,9 @@ importers:
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.19
+      prettier:
+        specifier: ^3.8.3
+        version: 3.8.3
       tsx:
         specifier: ^4.19.3
         version: 4.22.4
@@ -186,6 +189,11 @@ packages:
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
     os: [darwin]
 
+  prettier@3.8.3:
+    resolution: {integrity: sha512-7igPTM53cGHMW8xWuVTydi2KO233VFiTNyF5hLJqpilHfmn8C8gPf+PS7dUT64YcXFbiMGZxS9pCSxL/Dxm/Jw==}
+    engines: {node: '>=14'}
+    hasBin: true
+
   tsx@4.22.4:
     resolution: {integrity: sha512-X8EX+XV4QR5xCsrgxaED954zTDfY8KqlDtskKEL0cHhyS/P8b4IFOvGDQpsC9Q1XnLq915wEfwwY/zzskCtmhg==}
     engines: {node: '>=18.0.0'}
@@ -309,6 +317,8 @@ snapshots:
 
   fsevents@2.3.3:
     optional: true
+
+  prettier@3.8.3: {}
 
   tsx@4.22.4:
     dependencies:
