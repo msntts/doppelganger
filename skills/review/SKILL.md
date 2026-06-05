@@ -101,7 +101,7 @@ git diff HEAD
 `<VERDICT>` は判定結果に応じて `要修正` / `要確認` / `問題なし` に置き換える。
 
 ```bash
-node -e "const fs=require('fs'),os=require('os'),p=require('path');try{fs.appendFileSync(p.join(os.homedir(),'.claude','observer-log.jsonl'),JSON.stringify({timestamp:new Date().toISOString().slice(0,19),event_type:'review_verdict',verdict:'<VERDICT>'})+'\n')}catch{}" 2>/dev/null; true
+tsx hooks/log-observer.ts review_verdict <VERDICT>
 ```
 
 ---
