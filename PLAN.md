@@ -88,7 +88,7 @@ gatekeeper の `rotateLog` は変更しない。
 
 ---
 
-### [ ] Task 5: observer-prompt / observer-agent / work-logger を archive-log.ts に移行
+### [x] Task 5: observer-prompt / observer-agent / work-logger を archive-log.ts に移行
 
 Task 4 の archive-log.ts を使って 3 hook から重複コードを除去する。
 **受け入れ条件**: 各 hook の stdout/exit が変更前と完全一致。ログローテーションの閾値・世代数が変わらない。

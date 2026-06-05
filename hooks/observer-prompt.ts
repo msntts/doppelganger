@@ -9,9 +9,7 @@
  *   4. observer-log.jsonl にアーカイブ書き込み（既存フォーマット維持）
  */
 
-import { appendFileSync, existsSync, renameSync, statSync } from "fs";
-import { join } from "path";
-import { homedir } from "os";
+import { appendArchive } from "./archive-log.ts";
 import {
   type ResponseType,
   type SessionEvent,
@@ -20,9 +18,6 @@ import {
 } from "./event-log.ts";
 import { readHookInput } from "./hook-io.ts";
 
-const LOG_PATH = join(homedir(), ".claude", "observer-log.jsonl");
-const LOG_MAX_BYTES = 500 * 1024;
-const LOG_BACKUPS = 2;
 const TTL_MS = 60 * 60 * 1000;
 
 const REJECTION_RE =
@@ -67,15 +62,6 @@ function findPrecedingSkill(
     // agent_invoked: skip
   }
   return null;
-}
-
-function rotateLog(): void {
-  if (!existsSync(LOG_PATH) || statSync(LOG_PATH).size < LOG_MAX_BYTES) return;
-  for (let i = LOG_BACKUPS; i >= 1; i--) {
-    const src = i === 1 ? LOG_PATH : `${LOG_PATH}.${i - 1}`;
-    const dst = `${LOG_PATH}.${i}`;
-    if (existsSync(src)) renameSync(src, dst);
-  }
 }
 
 async function main(): Promise<void> {
@@ -137,8 +123,7 @@ async function main(): Promise<void> {
       archiveEntry.preceding_skill_ts = preceding.ts;
       archiveEntry.ai_elapsed_sec = preceding.elapsedSec;
     }
-    rotateLog();
-    appendFileSync(LOG_PATH, JSON.stringify(archiveEntry) + "\n", "utf-8");
+    appendArchive(archiveEntry);
   } catch {
     // fail-open
   }
