@@ -401,7 +401,7 @@ async function main(): Promise<void> {
     });
     allow(reason, eventName);
   } else {
-    const reason = "/gatekeeper 未評価 → deny";
+    const reason = "gatekeeper: 実行前に /gatekeeper の評価が必要";
     writeLog({
       ...baseLog,
       timestamp: new Date().toISOString().slice(0, 19),
@@ -409,11 +409,7 @@ async function main(): Promise<void> {
       reason,
       latency_ms: 0,
     });
-    block(
-      reason,
-      eventName,
-      "/gatekeeper を起動して評価してから再実行してください",
-    );
+    block(reason, eventName);
   }
 }
 
