@@ -141,6 +141,8 @@ lockfile（`pnpm-lock.yaml` / `uv.lock`）は必ずコミットする。`.gitign
 
 **ブロックされたら `/gatekeeper` を呼んでから再実行する。**
 `/gatekeeper` スキル自体は除外ルールにより常に呼び出せる。
+
+> **命名の依存**: `gatekeeper.ts` の step 0.1.5 はスキル名 `"gatekeeper"` をハードコードしている。スキルをリネームする場合は hook 側も合わせて変更する。
 呼ばれた頻度を `gatekeeper-log.jsonl` で計測し、
 `/tune` で allow パターンに昇格させながら徐々に改善する。
 
