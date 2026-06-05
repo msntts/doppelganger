@@ -1,50 +1,143 @@
-# doppelganger /tune skill — Implementation Plan
+# doppelganger リファクタリング計画
 
-## プロジェクト概要
-observer・gatekeeper ログから allow/deny パターン候補を抽出し、ユーザー確認後に `.claude/` 設定ファイルへ書き込む `/tune` スキルを実装する。
+## 目的
+
+hooks/ の重複コードを共有モジュールに括り出し、保守性を高める。
+挙動変更なし・機能追加なし。リファクタのみ。
 
 ## 環境
-- Windows 11 / TypeScript, tsx（既存 hooks と同スタック）
-- 入力: `~/.claude/gatekeeper-log.jsonl`・`~/.claude/observer-log.jsonl`・`~/.claude/work-log.jsonl`
-- 出力: `.claude/allow_patterns.json`・`.claude/denied_patterns.json`（project-local）・`~/.claude/tune-skip.json`（global）
 
-## 操作仕様
-- `/tune` を呼ぶと過去 30 日の候補リストを表示する
-- ユーザーが番号で選んだものだけが project-local `.claude/*.json` に追記される
-- 却下（skip）した候補は `~/.claude/tune-skip.json` に記録され次回から除外される
-- `NEVER_AUTO_SUGGEST` リストに含まれるパターンは候補に出ない
+- Windows 11 / TypeScript, tsx
+- hooks/ は `~/.claude/hooks/` にシンボリックリンクされ、**毎ツール呼び出し時にライブ実行**される
 
-## 受け入れ条件
-- `/tune` を呼ぶと allow 候補・deny 候補が表示される（ログが空の場合は「候補なし」で正常終了）
-- 番号選択後、対象 JSON が正しく更新されコミットされる
-- skip した候補が次回実行で出てこない
-- `rm`・`curl | sh` 等の危険パターンが候補に出ない
+## 基本方針
 
-## 完了条件
-- `tsx hooks/tune-helper.ts --project . 2>/dev/null` が JSON を stdout に出力する
-- `/tune` を手動実行して end-to-end が通る
+- **1 タスク = 1 コミット**（`/execute` 規約）
+- **挙動完全維持**を各タスクの受け入れ条件に明記する
+- 各タスク後に hook 単位の stdin 検証を実施する（tsconfig 無し・tsx は型チェック不要なため）
+- 検証方法: 代表的な hook-input JSON を stdin で流し、変更前と出力/exit が一致することを確認
+
+## 重複の実測値
+
+| 重複パターン | 件数 | 対象ファイル |
+|---|---|---|
+| stdin 読み取り + JSON.parse | 9 | 全 hook |
+| rotateLog (500KB/2-gen) | 3 | observer-prompt, observer-agent, work-logger |
+| JSONL archive append | 2 | observer-prompt, observer-agent |
+| ISO タイムスタンプ手書き | 8回 | gatekeeper (writeLog 呼び出しごと) |
+
+⚠️ gatekeeper の rotateLog は **10MB/1-gen** で方式が異なる。他の 3 本と統一しない。
+
+## Hotfix（最優先）
+
+<!-- 緊急対応はここに積む -->
 
 ---
 
-## 🔥 Hotfix（最優先）
+## タスク一覧
 
-<!-- 動作確認中の不具合・緊急対応はここに積む。未完了がある限り最優先で対応する -->
+### [ ] Task 1: package-lock.json 削除
+
+**背景**: pnpm が正（commit `54431fa` で統一済み）なのに `package-lock.json` が残存。
+**変更**: `package-lock.json` を削除する。
+**受け入れ条件**: `pnpm install` が正常に動作し、hook が tsx で実行できること。
+**検証**: `tsx hooks/event-log.ts` がエラーなく import できること。
 
 ---
+
+### [ ] Task 2: gatekeeper.ts — ISO タイムスタンプを writeLog に閉じ込める
+
+**背景**: `new Date().toISOString().slice(0, 19)` を `writeLog` 呼び出しごとに 8 回手で渡している。
+**変更**: `writeLog` 内で `timestamp` を自動生成し、呼び出し側から引数を削除する。
+**受け入れ条件**: gatekeeper の判定結果（allow/block）とログ出力が変更前と完全一致。
+**検証**: allow ケース・block ケースの JSON を stdin で流して出力を比較。
+
+---
+
+### [ ] Task 3: hooks/hook-io.ts 抽出 — stdin 読み取りの共通化
+
+**背景**: 以下の 9 hook に同一ボイラープレートが存在する。
+
+```typescript
+const chunks: Buffer[] = [];
+for await (const chunk of process.stdin) { chunks.push(chunk as Buffer); }
+const data = JSON.parse(Buffer.concat(chunks).toString("utf-8"));
+```
+
+**変更**: `hooks/hook-io.ts` を新規作成し `readHookInput<T>()` を export する。
+observer-prompt / observer-agent / observer-skill / observer-stop-prompt / observer-cleanup /
+work-logger / caffeinate / check-rm-safety の 8 hook に適用する。
+**gatekeeper.ts は Task 6 で別途適用**（最重要ファイルなので分離）。
+**受け入れ条件**: 各 hook の stdin/stdout/exit が変更前と完全一致。
+
+---
+
+### [ ] Task 4: hooks/archive-log.ts 抽出 — rotateLog + appendArchive の共通化
+
+**背景**: observer-prompt・observer-agent・work-logger に `rotateLog(500KB/2-gen)` の完全同一コピーが 3 つ。
+observer-prompt と observer-agent では homedir JSONL への append も重複。
+
+**変更**: `hooks/archive-log.ts` を新規作成し以下を export する。
+- `rotateLog(path: string, maxBytes?: number, backups?: number): void`  
+  — デフォルト値で 500KB/2-gen を保持する（gatekeeper の 10MB/1-gen は触らない）
+- `appendArchive(entry: Record<string, unknown>): void`  
+  — LOG_PATH への rotate + appendFileSync をまとめる
+
+**受け入れ条件**: observer-prompt・observer-agent・work-logger のログ出力・ローテーション動作が変更前と完全一致。
+gatekeeper の `rotateLog` は変更しない。
+
+---
+
+### [ ] Task 5: observer-prompt / observer-agent / work-logger を archive-log.ts に移行
+
+Task 4 の archive-log.ts を使って 3 hook から重複コードを除去する。
+**受け入れ条件**: 各 hook の stdout/exit が変更前と完全一致。ログローテーションの閾値・世代数が変わらない。
+
+---
+
+### [ ] Task 6: gatekeeper.ts を hook-io.ts に移行（最後・最慎重）
+
+**背景**: gatekeeper は直近で何度も変更されており、最重要ファイル。
+**変更**: Task 3 で作成した `readHookInput<T>()` を gatekeeper に適用する。
+**受け入れ条件**:
+- allow / block それぞれのシナリオで出力・exit が変更前と完全一致
+- PermissionRequest と PreToolUse の両イベントで動作確認する
+- `NEVER_READONLY` セットの中身は変更しない
+
+---
+
+### [ ] Task 7: docs/briefs アーカイブ整理（任意）
+
+`docs/briefs/step-1-*` は `/tune` 実装時のブリーフで現状は陳腐化している。
+削除 or `docs/archive/` への移動を検討する。**ユーザー確認後に実施**。
+
+---
+
+## 検証用サンプル入力
+
+```json
+// PreToolUse (Bash) — allow ケース
+{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"ls"},"session_id":"test123","cwd":"/tmp"}
+
+// PreToolUse (Write) — block ケース（gatekeeper 未評価）
+{"hook_event_name":"PreToolUse","tool_name":"Write","tool_input":{"file_path":"/tmp/x.txt"},"session_id":"test_no_flag","cwd":"/tmp"}
+
+// UserPromptSubmit — observer-prompt
+{"session_id":"test123","prompt":"了解"}
+
+// PostToolUse — work-logger
+{"tool_name":"Bash","tool_input":{"command":"ls"},"session_id":"test123"}
+```
 
 ---
 
 ## メモ・決定事項
-- helper script は `hooks/tune-helper.ts`（他 hooks と同ディレクトリで一元管理）
-- allow 候補の信号源: `gatekeeper-log.jsonl` の `tool=Bash`, `decision=allow`, reason に "静的ルール対象外" を含むエントリ
-- deny 候補の信号源: `observer-log.jsonl` の `response_type=rejection` × `work-log.jsonl` の同セッション5分前以内の Bash コマンドの相関
-- allow_patterns.json フォーマット: `{ "bash": ["pattern1", ...] }`
-- denied_patterns.json フォーマット: `{ "tools": [], "bash_patterns": ["pattern1", ...] }`
-- 書き込み先は project-local `.claude/`（`~/.claude/` には書かない）
-- `fewer-permission-prompts` スキル（settings.json permissions.allow）とは別系統。deny 提案に独自価値がある
+
+- 新規モジュールの置き場: `hooks/hook-io.ts`・`hooks/archive-log.ts`（既存の `event-log.ts` と同列）
+- hooks/ は `~/.claude/hooks/` へのシンボリックリンク実体なので相対 import は実証済み
+- `pnpm-workspace.yaml` (`allowBuilds: esbuild: true`) は esbuild の build 設定なので保持する
+- task 実行は `/execute` で進める
 
 ## 完了済みフェーズ
+
 <!-- Phase {N}: {フェーズ名} `{開始ハッシュ}..{終了ハッシュ}` -->
-- Phase 1: tune-helper.ts JSONL 集計・候補抽出 `2e77dc9..3450f56`
-- Phase 2: skills/tune/SKILL.md フロー制御 `15c80f0`
-- Phase 3: 文書化 `1db665e`

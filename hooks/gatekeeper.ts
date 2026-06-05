@@ -5,14 +5,15 @@
  * 判定フロー:
  *   0.   denied_patterns（ALWAYS_DENY）→ 即ブロック
  *   0.1  git add/commit（安全）→ 即 allow
+ *   0.1.5 /gatekeeper スキル → event log に skill_start を記録して即 allow（自己ブロック防止）
  *   0.2  per-project allow patterns → 即 allow
  *   0.3  debug/* ブランチ → 全操作を即 allow
  *   1.   readonly_tools.json に登録済み → 即 allow
  *   2.   それ以外（PermissionRequest）→ allow（ネイティブダイアログ抑制）
- *   2.   それ以外（PreToolUse）→ /gatekeeper 評価済みなら allow、未評価なら deny
+ *   2.   それ以外（PreToolUse）→ 今回のユーザーターン内に /gatekeeper 評価済みなら allow、未評価なら deny
  *
  * PermissionRequest は常に allow を返してネイティブダイアログを抑制する。
- * PreToolUse で /gatekeeper 評価済みフラグを確認して実際の強制を行う。
+ * PreToolUse で event log の skill_start(gatekeeper) を確認して実際の強制を行う。
  *
  * エラー時はフック自体の障害でユーザー操作を止めないよう exit 0 にフォールバックする。
  */
@@ -24,15 +25,13 @@ import {
   readFileSync,
   renameSync,
   statSync,
-  writeFileSync,
 } from "fs";
 import { homedir } from "os";
 import { isAbsolute, join } from "path";
+import { appendEvent, readEvents } from "./event-log.ts";
 
 const LOG_PATH = join(homedir(), ".claude", "gatekeeper-log.jsonl");
 const LOG_MAX_BYTES = 10 * 1024 * 1024; // 10MB
-const GATEKEEPER_TTL_MS = 30 * 60 * 1000;
-const GATEKEEPER_FLAG = join(homedir(), ".claude", ".gatekeeper-last-called");
 
 interface HookInput {
   hook_event_name?: string;
@@ -170,17 +169,14 @@ const NEVER_READONLY: ReadonlySet<string> = new Set([
   "Monitor",
 ]);
 
-function hasRecentGatekeeperCall(): boolean {
-  try {
-    if (!existsSync(GATEKEEPER_FLAG)) return false;
-    return (
-      Date.now() -
-        new Date(readFileSync(GATEKEEPER_FLAG, "utf-8").trim()).getTime() <
-      GATEKEEPER_TTL_MS
-    );
-  } catch {
-    return false;
+function hasRecentGatekeeperEval(sessionId: string): boolean {
+  const events = readEvents(sessionId);
+  for (let i = events.length - 1; i >= 0; i--) {
+    const ev = events[i];
+    if (ev.kind === "user_response") return false;
+    if (ev.kind === "skill_start" && ev.skill === "gatekeeper") return true;
   }
+  return false;
 }
 
 function loadBashAllowPatterns(cwd?: string): string[] {
@@ -261,8 +257,9 @@ async function main(): Promise<void> {
   const toolName = data.tool_name;
   const toolInput = data.tool_input ?? {};
   const summary = inputSummary(toolName, toolInput);
+  const sessionId = data.session_id ?? "";
   const baseLog = {
-    session_id: data.session_id ?? "",
+    session_id: sessionId,
     tool: toolName,
     input_summary: summary,
   };
@@ -306,11 +303,20 @@ async function main(): Promise<void> {
   }
 
   // 0.1.5. /gatekeeper スキル自体は常に allow（自己ブロック防止）
+  // event log に skill_start を記録することで以降のツール呼び出しを承認する
   if (toolName === "Skill" && String(toolInput.skill ?? "") === "gatekeeper") {
     const reason = "/gatekeeper スキル自体は除外 → 自動承認";
     try {
-      writeFileSync(GATEKEEPER_FLAG, new Date().toISOString(), "utf-8");
-    } catch {}
+      appendEvent(sessionId, {
+        kind: "skill_start",
+        session_id: sessionId,
+        skill: "gatekeeper",
+        args: String(toolInput.args ?? "").slice(0, 100) || null,
+        source: "claude_tool",
+      });
+    } catch {
+      // fail-open: event log 書き込み失敗はスキル実行を止めない
+    }
     writeLog({
       ...baseLog,
       timestamp: new Date().toISOString().slice(0, 19),
@@ -375,7 +381,7 @@ async function main(): Promise<void> {
 
   // 2. それ以外
   //   PermissionRequest: 常に allow（ネイティブダイアログ抑制）
-  //   PreToolUse: /gatekeeper 評価済みなら allow、未評価なら deny
+  //   PreToolUse: 今回のユーザーターン内に /gatekeeper 評価済みなら allow、未評価なら deny
   if (eventName === "PermissionRequest") {
     const reason =
       "静的ルール対象外 → PermissionRequest allow（ダイアログ抑制）";
@@ -390,8 +396,8 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (hasRecentGatekeeperCall()) {
-    const reason = "/gatekeeper 評価済み（30分以内）→ 承認";
+  if (hasRecentGatekeeperEval(sessionId)) {
+    const reason = "/gatekeeper 評価済み → 承認";
     writeLog({
       ...baseLog,
       timestamp: new Date().toISOString().slice(0, 19),
