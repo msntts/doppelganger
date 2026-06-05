@@ -55,15 +55,6 @@
         ]
       },
       {
-        "matcher": "mcp__.*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "tsx ~/.claude/hooks/remind-toolsearch.ts"
-          }
-        ]
-      },
-      {
         "matcher": "Skill",
         "hooks": [
           {
