@@ -24,14 +24,16 @@ import {
   readFileSync,
   renameSync,
   statSync,
+  writeFileSync,
 } from "fs";
 import { homedir } from "os";
 import { isAbsolute, join } from "path";
+import { readEvents, appendEvent } from "./event-log.ts";
 
 const LOG_PATH = join(homedir(), ".claude", "gatekeeper-log.jsonl");
 const LOG_MAX_BYTES = 10 * 1024 * 1024; // 10MB
-const GATEKEEPER_FLAG = join(homedir(), ".claude", ".gatekeeper-last-called");
-const GATEKEEPER_TTL_MS = 30 * 60 * 1000;
+const GATEKEEPER_TTL_MS = 30 *60 * 1000;
+const GATEKEEPER_FLAG = join(homedir(), ".claude",".gatekeeper-last-called");
 
 interface HookInput {
   hook_event_name?: string;
@@ -170,11 +172,19 @@ const NEVER_READONLY: ReadonlySet<string> = new Set([
 ]);
 
 
-function hasRecentGatekeeperCall(): boolean {
+function hasRecentGatekeeperCall(sessionId: string): boolean {
   try {
-    if (!existsSync(GATEKEEPER_FLAG)) return false;
-    const ts = readFileSync(GATEKEEPER_FLAG, "utf-8").trim();
-    return Date.now() - new Date(ts).getTime() < GATEKEEPER_TTL_MS;
+    const cutoff = Date.now() - GATEKEEPER_TTL_MS;
+    if (
+      existsSync(GATEKEEPER_FLAG) &&
+      Date.now() - new Date(readFileSync(GATEKEEPER_FLAG, "utf-8").trim()).getTime() < GATEKEEPER_TTL_MS
+    ) return true;
+    return readEvents(sessionId).some(
+      (e) =>
+        e.kind === "skill_start" &&
+        e.skill === "gatekeeper" &&
+        new Date(e.ts).getTime() >= cutoff,
+    );
   } catch {
     return false;
   }
@@ -285,6 +295,8 @@ async function main(): Promise<void> {
   // 0.1.5. /gatekeeper スキル自体は常に allow（自己ブロック防止）
   if (toolName === "Skill" && String(toolInput.skill ?? "") === "gatekeeper") {
     const reason = "/gatekeeper スキル自体は除外 → 自動承認";
+    try { appendEvent(data.session_id ?? "", { kind: "skill_start", session_id: data.session_id ?? "", skill: "gatekeeper", args: null, source: "claude_tool" }); } catch {}
+    try { writeFileSync(GATEKEEPER_FLAG, new Date().toISOString(), "utf-8"); } catch {}
     writeLog({ ...baseLog, timestamp: new Date().toISOString().slice(0, 19), decision: "allow", reason, latency_ms: 0 });
     allow(reason, eventName);
     return;
@@ -351,7 +363,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (hasRecentGatekeeperCall()) {
+  if (hasRecentGatekeeperCall(data.session_id?? "")) {
     const reason = "/gatekeeper 評価済み（30分以内）→ 承認";
     writeLog({ ...baseLog, timestamp: new Date().toISOString().slice(0, 19), decision: "allow", reason, latency_ms: 0 });
     allow(reason, eventName);
