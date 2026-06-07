@@ -3,6 +3,7 @@ name: gatekeeper
 description: ツール実行の安全性を自己評価する。「これ実行して大丈夫？」「このコマンド安全？」「操作前に確認したい」等で使う。CLAUDE.md ルールにより、readonly 系以外の操作前に自動起動する。
 user-invocable: true
 allowed-tools: Read, Bash
+model: claude-haiku-4-5-20251001
 ---
 
 # /gatekeeper
