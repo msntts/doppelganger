@@ -32,7 +32,7 @@
 
 - [x] 2-1. `hooks/approval_policy.md` — 現行実装の説明に全面書き直し
 - [x] 2-2. `skills/allow/SKILL.md` — 「gatekeeper.ts が LLM に渡す」虚偽記述修正・Step 1 の `decision=='ask'` 検索を現行実装に合わせて削除
-- [ ] 2-3. `CLAUDE.md`（グローバル）— learn/誤学習注記を削除し現行実装に合わせる
+- [x] 2-3. `CLAUDE.md`（グローバル）— learn/誤学習注記を削除し現行実装に合わせる
 - [ ] 2-4. `skills/gatekeeper/SKILL.md` — 旧概念（category_overrides.json 等）の残滓を整理
 
 ## Phase 3: README・プロジェクト CLAUDE.md 更新
