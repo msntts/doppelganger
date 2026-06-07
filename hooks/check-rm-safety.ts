@@ -12,8 +12,8 @@
  */
 
 import { realpathSync } from "fs";
-import { homedir } from "os";
-import { dirname, basename, resolve } from "path";
+import { homedir, tmpdir } from "os";
+import { dirname, basename, resolve, sep } from "path";
 import { readHookInput } from "./hook-io.ts";
 
 interface HookInput {
@@ -22,13 +22,17 @@ interface HookInput {
   cwd?: string;
 }
 
-// /tmp の実パスをモジュールロード時に解決（macOS では /private/tmp になる）
-const REAL_TMP = (() => {
-  try {
-    return realpathSync("/tmp");
-  } catch {
-    return "/tmp";
+// 許可される一時ディレクトリの実パスセット（/tmp + OS ネイティブ tmpdir）
+const REAL_TMP_DIRS: Set<string> = (() => {
+  const dirs = new Set<string>();
+  for (const p of ["/tmp", tmpdir()]) {
+    try {
+      dirs.add(realpathSync(p));
+    } catch {
+      dirs.add(p);
+    }
   }
+  return dirs;
 })();
 
 function resolveAbsPath(p: string, cwd: string): string {
@@ -98,19 +102,18 @@ function extractRmPaths(command: string): string[] {
 }
 
 function isAllowed(absPath: string, cwd: string): boolean {
-  return (
-    absPath === cwd ||
-    absPath.startsWith(cwd + "/") ||
-    absPath === REAL_TMP ||
-    absPath.startsWith(REAL_TMP + "/")
-  );
+  if (absPath === cwd || absPath.startsWith(cwd + sep)) return true;
+  for (const tmp of REAL_TMP_DIRS) {
+    if (absPath === tmp || absPath.startsWith(tmp + sep)) return true;
+  }
+  return false;
 }
 
 function outputBlock(rawPath: string, resolvedPath: string, cwd: string): void {
   // reason を組み立ててから JSON.stringify に渡すことで特殊文字を確実にエスケープする
   const reason =
     `rm パス ${JSON.stringify(rawPath)} が ${JSON.stringify(resolvedPath)} に解決されました。` +
-    `許可ゾーン外（CWD: ${cwd} および /tmp 以外）への削除はブロックされます。`;
+    `許可ゾーン外（CWD: ${cwd} および一時ディレクトリ以外）への削除はブロックされます。`;
   const output = {
     hookSpecificOutput: {
       hookEventName: "PreToolUse",

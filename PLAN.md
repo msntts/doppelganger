@@ -32,7 +32,7 @@
 
 - [x] 4-1. `observer-prompt.ts` — `classifyResponse(prompt)` の重複呼び出し（L92 と L124）を変数化して1回に
 - [x] 4-2. `scripts/log-observer.ts` — `appendArchive` 使用に統一してローテーションを追加
-- [ ] 4-3. `check-rm-safety.ts` — Windows の `/tmp` を OS の `tmpdir()` で補完する
+- [x] 4-3. `check-rm-safety.ts` — Windows の `/tmp` を OS の `tmpdir()` で補完する
 - [ ] 4-4. `PLAN.md` — 旧リファクタ計画（全タスク完了済み）を削除し本ファイルのみにする
 
 ---
