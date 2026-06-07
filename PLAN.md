@@ -28,13 +28,6 @@
 
 ---
 
-## Phase 2: 旧 LLM アーキテクチャ残骸の除去 [REVIEW]
-
-- [x] 2-1. `hooks/approval_policy.md` — 現行実装の説明に全面書き直し
-- [x] 2-2. `skills/allow/SKILL.md` — 「gatekeeper.ts が LLM に渡す」虚偽記述修正・Step 1 の `decision=='ask'` 検索を現行実装に合わせて削除
-- [x] 2-3. `CLAUDE.md`（グローバル）— learn/誤学習注記を削除し現行実装に合わせる
-- [x] 2-4. `skills/gatekeeper/SKILL.md` — 旧概念（category_overrides.json 等）の残滓を整理
-
 ## Phase 3: README・プロジェクト CLAUDE.md 更新
 
 - [ ] 3-1. `README.md` — 存在しない `remind-toolsearch.ts` 削除、実在するフック群を追記
@@ -59,3 +52,4 @@
 ## 完了済みフェーズ
 
 - Phase 1: バグ修正 `44b7635..f4d6afd`
+- Phase 2: 旧 LLM アーキテクチャ残骸の除去 `f4d6afd..ea6512e`
