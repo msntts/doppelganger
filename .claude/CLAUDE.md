@@ -27,16 +27,28 @@ doppelganger/
 ├── package.json       # hooks の TypeScript 依存関係
 ├── skills/            # カスタムスキル（~/.claude/skills/ の実体）
 │   ├── allow/         # 承認ポリシー注入スキル
+│   ├── analyze-observer/  # observer ログ統合分析スキル
 │   ├── execute/       # PLAN.md ベースの構造化実行スキル
 │   ├── filetree/      # broot ファイルツリー表示スキル
+│   ├── gatekeeper/    # ツール実行前の安全性自己評価スキル
 │   ├── investigate/   # デバッグ調査スキル
-│   └── review/        # Security・DevOps レビュースキル
+│   ├── review/        # Security・DevOps レビュースキル
+│   └── tune/          # allow/deny パターン学習スキル
 ├── hooks/             # フックスクリプト（~/.claude/hooks/ の実体）
-│   ├── gatekeeper.ts       # ツール実行の承認制御
-│   ├── work-logger.ts      # 作業ログ記録
-│   ├── caffeinate.ts       # セッション維持
-│   ├── approval_policy.md  # 承認ポリシー定義
-│   └── denied_patterns.json # 拒否パターン定義
+│   ├── gatekeeper.ts        # PreToolUse: 静的ルールで allow/block 判定
+│   ├── check-rm-safety.ts   # PreToolUse: rm コマンドの安全チェック
+│   ├── work-logger.ts       # PostToolUse: 作業ログ記録
+│   ├── observer-prompt.ts   # UserPromptSubmit: 判断帰属の分析・記録
+│   ├── observer-skill.ts    # PreToolUse(Skill): スキル呼び出し記録
+│   ├── observer-agent.ts    # PreToolUse(Agent): エージェント呼び出し記録
+│   ├── observer-stop-prompt.ts  # Stop: 未消費 skill_start の提示
+│   ├── observer-cleanup.ts  # Stop: event log のトリム
+│   ├── caffeinate.ts        # セッション維持
+│   ├── hook-io.ts           # stdin 読み取りユーティリティ（共通）
+│   ├── archive-log.ts       # ログローテーション・追記ユーティリティ（共通）
+│   ├── event-log.ts         # フック間 IPC バス（セッションスコープ JSONL）
+│   ├── approval_policy.md   # gatekeeper アーキテクチャ説明（参照用）
+│   └── denied_patterns.json # 常時ブロックパターン定義
 └── scripts/           # スキルから呼ばれる CLI スクリプト（~/.claude/scripts/ の実体）
     └── log-observer.ts     # observer-log.jsonl への追記
 ```
