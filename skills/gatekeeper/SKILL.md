@@ -18,10 +18,11 @@ model: claude-haiku-4-5-20251001
 
 ## 判定手順
 
-### 1. プロジェクト固有ポリシーの確認
+### 1. プロジェクト固有設定の確認
 
-カレントディレクトリの `.claude/approval_policy.md` を Read ツールで読み込む（存在する場合のみ）。
-以降の判定ではグローバルルールよりプロジェクトポリシーを優先する。
+カレントディレクトリの `.claude/allow_patterns.json`（Bash 許可パターン）と
+`.claude/denied_patterns.json`（ブロックパターン）を Read ツールで読み込む（存在する場合のみ）。
+`allow_patterns.json` に一致するコマンドはプロジェクトで承認済みとして扱い、`denied_patterns.json` に一致するコマンドは即 block とする。
 
 ### 2. カテゴリ分類
 
