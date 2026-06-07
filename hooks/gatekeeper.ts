@@ -5,15 +5,12 @@
  * 判定フロー:
  *   0.   denied_patterns（ALWAYS_DENY）→ 即ブロック
  *   0.1  git add/commit（安全）→ 即 allow
- *   0.1.5 /gatekeeper スキル → event log に skill_start を記録して即 allow（自己ブロック防止）
  *   0.2  per-project allow patterns → 即 allow
  *   0.3  debug/* ブランチ → 全操作を即 allow
  *   1.   readonly_tools.json に登録済み → 即 allow
- *   2.   それ以外（PermissionRequest）→ allow（ネイティブダイアログ抑制）
- *   2.   それ以外（PreToolUse）→ 今回のユーザーターン内に /gatekeeper 評価済みなら allow、未評価なら deny
+ *   2.   それ以外 → allow（LLM 判定は /gatekeeper スキルが Claude 側で担う）
  *
- * PermissionRequest は常に allow を返してネイティブダイアログを抑制する。
- * PreToolUse で event log の skill_start(gatekeeper) を確認して実際の強制を行う。
+ * PermissionRequest イベントでも同じ判定ロジックを使い、ネイティブ確認ダイアログを抑制する。
  *
  * エラー時はフック自体の障害でユーザー操作を止めないよう exit 0 にフォールバックする。
  */
@@ -28,7 +25,6 @@ import {
 } from "fs";
 import { homedir } from "os";
 import { isAbsolute, join } from "path";
-import { appendEvent, readEvents } from "./event-log.ts";
 import { readHookInput } from "./hook-io.ts";
 
 const LOG_PATH = join(homedir(), ".claude", "gatekeeper-log.jsonl");
@@ -174,16 +170,6 @@ const NEVER_READONLY: ReadonlySet<string> = new Set([
   "Monitor",
 ]);
 
-function hasRecentGatekeeperEval(sessionId: string): boolean {
-  const events = readEvents(sessionId);
-  for (let i = events.length - 1; i >= 0; i--) {
-    const ev = events[i];
-    if (ev.kind === "user_response") return false;
-    if (ev.kind === "skill_start" && ev.skill === "gatekeeper") return true;
-  }
-  return false;
-}
-
 function loadBashAllowPatterns(cwd?: string): string[] {
   const claudeDir = projectClaudeDir(cwd);
   if (!claudeDir) return [];
@@ -300,31 +286,6 @@ async function main(): Promise<void> {
     }
   }
 
-  // 0.1.5. /gatekeeper スキル自体は常に allow（自己ブロック防止）
-  // event log に skill_start を記録することで以降のツール呼び出しを承認する
-  if (toolName === "Skill" && String(toolInput.skill ?? "") === "gatekeeper") {
-    const reason = "/gatekeeper スキル自体は除外 → 自動承認";
-    try {
-      appendEvent(sessionId, {
-        kind: "skill_start",
-        session_id: sessionId,
-        skill: "gatekeeper",
-        args: String(toolInput.args ?? "").slice(0, 100) || null,
-        source: "claude_tool",
-      });
-    } catch {
-      // fail-open: event log 書き込み失敗はスキル実行を止めない
-    }
-    writeLog({
-      ...baseLog,
-      decision: "allow",
-      reason,
-      latency_ms: 0,
-    });
-    allow(reason, eventName);
-    return;
-  }
-
   // 0.2. per-project Bash allow patterns（特定コマンドの静的 allow）
   if (toolName === "Bash") {
     const cmd = String(toolInput.command ?? "");
@@ -373,41 +334,15 @@ async function main(): Promise<void> {
     return;
   }
 
-  // 2. それ以外
-  //   PermissionRequest: 常に allow（ネイティブダイアログ抑制）
-  //   PreToolUse: 今回のユーザーターン内に /gatekeeper 評価済みなら allow、未評価なら deny
-  if (eventName === "PermissionRequest") {
-    const reason =
-      "静的ルール対象外 → PermissionRequest allow（ダイアログ抑制）";
-    writeLog({
-      ...baseLog,
-      decision: "allow",
-      reason,
-      latency_ms: 0,
-    });
-    allow(reason, eventName);
-    return;
-  }
-
-  if (hasRecentGatekeeperEval(sessionId)) {
-    const reason = "/gatekeeper 評価済み → 承認";
-    writeLog({
-      ...baseLog,
-      decision: "allow",
-      reason,
-      latency_ms: 0,
-    });
-    allow(reason, eventName);
-  } else {
-    const reason = "gatekeeper: 実行前に /gatekeeper の評価が必要";
-    writeLog({
-      ...baseLog,
-      decision: "block",
-      reason,
-      latency_ms: 0,
-    });
-    block(reason, eventName);
-  }
+  // 2. それ以外 → allow（LLM 判定は Claude 側の /gatekeeper スキルが担う）
+  const reason = "静的ルール対象外 → allow";
+  writeLog({
+    ...baseLog,
+    decision: "allow",
+    reason,
+    latency_ms: 0,
+  });
+  allow(reason, eventName);
 }
 
 main().catch((err: Error) => {
