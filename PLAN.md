@@ -40,4 +40,4 @@
 - Phase 1: バグ修正 `44b7635..f4d6afd`
 - Phase 2: 旧 LLM アーキテクチャ残骸の除去 `f4d6afd..ea6512e`
 - Phase 3: README・プロジェクト CLAUDE.md 更新 `39d2d56..b90ae27`
-- Phase 4: コード軽微修正 `b90ae27..TBD`
+- Phase 4: コード軽微修正 `b90ae27..477e1f3`
