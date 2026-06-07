@@ -30,7 +30,7 @@
 
 ## Phase 3: README・プロジェクト CLAUDE.md 更新
 
-- [ ] 3-1. `README.md` — 存在しない `remind-toolsearch.ts` 削除、実在するフック群を追記
+- [x] 3-1. `README.md` — 存在しない `remind-toolsearch.ts` 削除、実在するフック群を追記
 - [ ] 3-2. `.claude/CLAUDE.md` — hooks/ 一覧をリファクタ後の実態に合わせる
 
 ## Phase 4: コード軽微修正
