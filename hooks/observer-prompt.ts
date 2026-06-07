@@ -79,6 +79,8 @@ async function main(): Promise<void> {
       ? "post_ai"
       : "autonomous";
 
+    const responseType = preceding ? classifyResponse(prompt) : undefined;
+
     // 2. Append user_response
     const userEvent: Omit<import("./event-log.ts").UserResponseEvent, "ts"> = {
       kind: "user_response",
@@ -89,7 +91,7 @@ async function main(): Promise<void> {
       cwd,
     };
     if (preceding) {
-      userEvent.response_type = classifyResponse(prompt);
+      userEvent.response_type = responseType;
       userEvent.preceding_skill = preceding.skill;
       userEvent.ai_elapsed_sec = preceding.elapsedSec;
     }
@@ -118,7 +120,7 @@ async function main(): Promise<void> {
       cwd,
     };
     if (preceding) {
-      archiveEntry.response_type = classifyResponse(prompt);
+      archiveEntry.response_type = responseType;
       archiveEntry.preceding_skill = preceding.skill;
       archiveEntry.preceding_skill_ts = preceding.ts;
       archiveEntry.ai_elapsed_sec = preceding.elapsedSec;

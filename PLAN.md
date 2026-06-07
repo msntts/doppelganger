@@ -28,14 +28,9 @@
 
 ---
 
-## Phase 3: README・プロジェクト CLAUDE.md 更新
-
-- [x] 3-1. `README.md` — 存在しない `remind-toolsearch.ts` 削除、実在するフック群を追記
-- [x] 3-2. `.claude/CLAUDE.md` — hooks/ 一覧をリファクタ後の実態に合わせる
-
 ## Phase 4: コード軽微修正
 
-- [ ] 4-1. `observer-prompt.ts` — `classifyResponse(prompt)` の重複呼び出し（L92 と L124）を変数化して1回に
+- [x] 4-1. `observer-prompt.ts` — `classifyResponse(prompt)` の重複呼び出し（L92 と L124）を変数化して1回に
 - [ ] 4-2. `scripts/log-observer.ts` — `appendArchive` 使用に統一してローテーションを追加
 - [ ] 4-3. `check-rm-safety.ts` — Windows の `/tmp` を OS の `tmpdir()` で補完する
 - [ ] 4-4. `PLAN.md` — 旧リファクタ計画（全タスク完了済み）を削除し本ファイルのみにする
@@ -53,3 +48,4 @@
 
 - Phase 1: バグ修正 `44b7635..f4d6afd`
 - Phase 2: 旧 LLM アーキテクチャ残骸の除去 `f4d6afd..ea6512e`
+- Phase 3: README・プロジェクト CLAUDE.md 更新 `39d2d56..b90ae27`
