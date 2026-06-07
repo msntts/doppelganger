@@ -131,9 +131,15 @@ lockfile（`pnpm-lock.yaml` / `uv.lock`）は必ずコミットする。`.gitign
 軽微な修正（1ファイル・数行・明らかな実装方針）では不要。
 
 ### Review（セキュリティ・DevOps レビュー）
-`git commit` を実行する前に必ず `review` スキルを呼び出す。
+
+**コミット前（毎回必須）**: `review security` を呼び出す。Security のみ実行。ファイルタイプを問わず常に走らせる。PII・secrets・認証不備を早期検出するため省略しない。
+
+**push 前（必須）**: `review devops` を呼び出す。変更ファイルのタイプを判定し、該当する観点のみ実行する。
+
+- `*.md` / `*.txt` / docs 系のみの差分 → DevOps スキップ（Security は push 前にも不要、コミット済みのため）
+- コード・設定・インフラ系のファイルが1つでも含まれる → DevOps 実行
+
 `/execute` スキル経由かどうか、変更規模の大小に関わらず適用する。
-（`/execute` 内の `[REVIEW]` フェーズ完了時の自動レビューとは別に、毎コミット直前にも実行する）
 
 ### Gatekeeper（PreToolUse による強制評価）
 
