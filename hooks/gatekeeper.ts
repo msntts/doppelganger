@@ -317,7 +317,7 @@ async function main(): Promise<void> {
       reason,
       latency_ms: 0,
     });
-    allow(reason);
+    allow(reason, eventName);
     return;
   }
 
@@ -330,7 +330,7 @@ async function main(): Promise<void> {
       reason,
       latency_ms: 0,
     });
-    allow(reason);
+    allow(reason, eventName);
     return;
   }
 
