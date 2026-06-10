@@ -79,7 +79,17 @@ async function main(): Promise<void> {
       ? "post_ai"
       : "autonomous";
 
-    const responseType = preceding ? classifyResponse(prompt) : undefined;
+    let responseType = preceding ? classifyResponse(prompt) : undefined;
+
+    // review 後の短い承認フレーズ（20文字未満・疑問符なし）を unclear から approval に補正
+    if (
+      responseType === "unclear" &&
+      preceding?.skill === "review" &&
+      prompt.length < 20 &&
+      !prompt.trimEnd().endsWith("？")
+    ) {
+      responseType = "approval";
+    }
 
     // 2. Append user_response
     const userEvent: Omit<import("./event-log.ts").UserResponseEvent, "ts"> = {
