@@ -118,10 +118,23 @@ Security + DevOps 両方を並列起動する。
 
 ---
 
-### 5. 判定ログの記録
+### 5. 判定ログの記録（必須 — ステップ6より前に必ず実行すること）
 
+判定に応じて以下のいずれか一つを実行する：
+
+**🟢 問題なし:**
 ```bash
-tsx ~/.claude/scripts/log-observer.ts review_verdict <VERDICT>
+tsx ~/.claude/scripts/log-observer.ts review_verdict 問題なし
+```
+
+**🟡 要確認:**
+```bash
+tsx ~/.claude/scripts/log-observer.ts review_verdict 要確認
+```
+
+**🔴 要修正:**
+```bash
+tsx ~/.claude/scripts/log-observer.ts review_verdict 要修正
 ```
 
 ---
