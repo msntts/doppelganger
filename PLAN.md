@@ -28,6 +28,19 @@
 
 ---
 
+## Phase 8: gatekeeper PermissionRequest ログ記録
+
+**背景:**
+analyze-observer で「PermissionRequest 発火後に `/gatekeeper` スキルが呼ばれたか」を集計したいが、現状は両イベントとも observer-log.jsonl に記録されていない。計測できれば以下の 4 分類が可能になる：
+- `verdict=allow` + `skill_preceded=false` → スキル不要・呼ばなかった（正常）
+- `verdict=ask/block` + `skill_preceded=true` → スキル必要・呼んだ（正常）
+- `verdict=ask/block` + `skill_preceded=false` → スキル必要・**呼ばなかった（漏れ）**
+- `verdict=allow` + `skill_preceded=true` → スキル呼んだが allow（過剰呼び出し）
+
+- [ ] 8-1. `hooks/gatekeeper.ts` — 判定完了時に `appendArchive` で `permission_request` イベントを書き込む。フィールド: `event_type`, `session_id`, `timestamp`, `tool_name`, `command_preview`（先頭100文字）, `verdict`（allow/ask/block）, `skill_preceded`（IPC バスの直前 `skill_start` に `skill==="gatekeeper"` があるか）。⚠️ `command_preview` 書き込み前に `KEY=`, `Bearer `, `password=`, `token=` 等のシークレットパターンを `***` にマスクすること（observer-log.jsonl は永続ファイルのため平文秘密情報を残さない）
+
+---
+
 ## メモ・決定事項
 
 - `caffeinate.ts` の Windows での無操作起動はオーバーヘッドが軽微なため放置（Mac 移行時に有効になる）
