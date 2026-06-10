@@ -25,6 +25,8 @@ import {
 } from "fs";
 import { homedir } from "os";
 import { isAbsolute, join } from "path";
+import { appendArchive } from "./archive-log.ts";
+import { readEvents } from "./event-log.ts";
 import { readHookInput } from "./hook-io.ts";
 
 const LOG_PATH = join(homedir(), ".claude", "gatekeeper-log.jsonl");
@@ -80,6 +82,50 @@ function writeLog(entry: LogEntry): void {
     );
   } catch {
     // ログ失敗はサイレントに無視
+  }
+}
+
+// Mask common secret patterns before writing to persistent observer-log.jsonl
+const SECRET_PATTERN =
+  /((?:KEY|SECRET|TOKEN|PASSWORD|BEARER)\s*=\s*|Bearer\s+)([^\s'"&;|]{4,})/gi;
+
+function maskSecrets(text: string): string {
+  return text.replace(SECRET_PATTERN, (_m, prefix) => `${prefix}***`);
+}
+
+function hasGatekeeperSkill(sessionId: string): boolean {
+  if (!sessionId) return false;
+  try {
+    const events = readEvents(sessionId);
+    for (let i = events.length - 1; i >= 0; i--) {
+      const ev = events[i];
+      if (ev.kind === "user_response") return false;
+      if (ev.kind === "skill_start" && ev.skill === "gatekeeper") return true;
+    }
+  } catch {
+    // fail-open
+  }
+  return false;
+}
+
+function logObserverEvent(
+  sessionId: string,
+  toolName: string,
+  commandPreview: string,
+  verdict: "allow" | "block",
+): void {
+  try {
+    appendArchive({
+      event_type: "permission_request",
+      session_id: sessionId,
+      timestamp: new Date().toISOString().slice(0, 19),
+      tool_name: toolName,
+      command_preview: maskSecrets(commandPreview).slice(0, 100),
+      verdict,
+      skill_preceded: hasGatekeeperSkill(sessionId),
+    });
+  } catch {
+    // fail-open: ログ失敗でツール実行を止めない
   }
 }
 
@@ -263,6 +309,8 @@ async function main(): Promise<void> {
       reason: deniedReason,
       latency_ms: 0,
     });
+    if (eventName === "PermissionRequest")
+      logObserverEvent(sessionId, toolName, summary, "block");
     block(deniedReason, eventName);
     return;
   }
@@ -281,6 +329,8 @@ async function main(): Promise<void> {
         reason,
         latency_ms: 0,
       });
+      if (eventName === "PermissionRequest")
+        logObserverEvent(sessionId, toolName, summary, "allow");
       allow(reason, eventName);
       return;
     }
@@ -302,6 +352,8 @@ async function main(): Promise<void> {
         reason,
         latency_ms: 0,
       });
+      if (eventName === "PermissionRequest")
+        logObserverEvent(sessionId, toolName, summary, "allow");
       allow(reason, eventName);
       return;
     }
@@ -317,6 +369,8 @@ async function main(): Promise<void> {
       reason,
       latency_ms: 0,
     });
+    if (eventName === "PermissionRequest")
+      logObserverEvent(sessionId, toolName, summary, "allow");
     allow(reason, eventName);
     return;
   }
@@ -330,6 +384,8 @@ async function main(): Promise<void> {
       reason,
       latency_ms: 0,
     });
+    if (eventName === "PermissionRequest")
+      logObserverEvent(sessionId, toolName, summary, "allow");
     allow(reason, eventName);
     return;
   }
@@ -342,6 +398,8 @@ async function main(): Promise<void> {
     reason,
     latency_ms: 0,
   });
+  if (eventName === "PermissionRequest")
+    logObserverEvent(sessionId, toolName, summary, "allow");
   allow(reason, eventName);
 }
 
