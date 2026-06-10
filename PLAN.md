@@ -28,15 +28,6 @@
 
 ---
 
-## Phase 7: CLAUDE.md デバッグ仮説ルール追加
-
-**背景:**
-Wrong Approach 摩擦が P1→P2 で 5→7 件に増加（期間は P1=24 日、P2=5 日のため rate 換算で 0.21→1.4 件/日と急増。ただしサンプルが少なく確定的ではない）。login hang 誤診断、OAuth vs storageState 誤仮定など MCP/ブラウザ自動化タスクでの初期診断ミスが観測されている。insights の「Diagnose before patching」推奨とも一致。
-
-- [x] 7-1. `CLAUDE.md`（`~/.claude/CLAUDE.md` シンボリックリンク先）に「デバッグ方針」セクションを追加。「不確かさとリスク判断」セクションの直後に配置。内容: MCP サーバー・ブラウザ自動化・外部 API の不具合調査時は仮説を 2〜3 個列挙して根拠を示してからコードを変更する、盲目的リトライ禁止
-
----
-
 ## メモ・決定事項
 
 - `caffeinate.ts` の Windows での無操作起動はオーバーヘッドが軽微なため放置（Mac 移行時に有効になる）
@@ -52,3 +43,4 @@ Wrong Approach 摩擦が P1→P2 で 5→7 件に増加（期間は P1=24 日、
 - Phase 4: コード軽微修正 `b90ae27..477e1f3`
 - Phase 5: observer unclear 分類改善 `2ec4681..b27ba7a`
 - Phase 6: review_verdict emit 修正 `b27ba7a..e5d58c2`
+- Phase 7: CLAUDE.md デバッグ仮説ルール追加 `e5d58c2..bbacec3`
