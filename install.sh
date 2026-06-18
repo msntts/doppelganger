@@ -60,17 +60,31 @@ fi
 MSYS=winsymlinks:nativestrict ln -s "$SCRIPT_DIR/skills" "$CLAUDE_DIR/skills"
 echo "  skills/ のシンボリックリンクを作成しました"
 
-# --- settings.json ---
+# --- settings.json のマージ ---
+# settings.json はシンボリックリンクにしない。
+# doppelganger/settings.json の hooks・permissions・model・extraKnownMarketplaces・advisorModel を
+# ~/.claude/settings.json へ idempotent にマージする。
+# Claude Code が settings.json を書き換えても他のキーは保持される。
 SETTINGS_SRC="$SCRIPT_DIR/settings.json"
 SETTINGS_DST="$CLAUDE_DIR/settings.json"
+
+# シンボリックリンクが残っていたら実ファイルに戻す
 if [ -L "$SETTINGS_DST" ]; then
-  rm "$SETTINGS_DST"
-elif [ -f "$SETTINGS_DST" ]; then
-  mv "$SETTINGS_DST" "$SETTINGS_DST.bak"
-  echo "  既存の settings.json を settings.json.bak にバックアップしました"
+  cp --dereference "$SETTINGS_DST" "$SETTINGS_DST.tmp" && mv "$SETTINGS_DST.tmp" "$SETTINGS_DST"
+  echo "  settings.json のシンボリックリンクを実ファイルに変換しました"
 fi
-MSYS=winsymlinks:nativestrict ln -s "$SETTINGS_SRC" "$SETTINGS_DST"
-echo "  settings.json のシンボリックリンクを作成しました"
+
+if ! command -v jq &>/dev/null; then
+  echo "  jq が見つかりません。settings.json のマージをスキップします。"
+  echo "  jq をインストール後に install.sh を再実行してください。"
+else
+  if [ ! -f "$SETTINGS_DST" ]; then
+    echo "{}" > "$SETTINGS_DST"
+  fi
+  # src のキーで dst を上書きマージ（dst 側の独自キーは保持）
+  jq -s '.[0] * .[1]' "$SETTINGS_DST" "$SETTINGS_SRC" > "$SETTINGS_DST.tmp" && mv "$SETTINGS_DST.tmp" "$SETTINGS_DST"
+  echo "  settings.json をマージしました"
+fi
 
 echo "完了。Claude Code を再起動してください。"
 echo ""

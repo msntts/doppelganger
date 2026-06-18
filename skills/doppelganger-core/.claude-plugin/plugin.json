@@ -1,9 +1,0 @@
-{
-  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
-  "name": "doppelganger-core",
-  "version": "0.1.0",
-  "description": "Core hooks for doppelganger: gatekeeper, observer, work-logger, and session management",
-  "author": {
-    "name": "msntts"
-  }
-}
