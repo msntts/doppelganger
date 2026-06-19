@@ -16,6 +16,7 @@
     }
   },
   "advisorModel": "opus",
+  "language": "日本語",
   "hooks": {
     "UserPromptSubmit": [
       {
