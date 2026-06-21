@@ -65,6 +65,15 @@
         ]
       },
       {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "tsx ~/.claude/hooks/format-on-commit.ts"
+          }
+        ]
+      },
+      {
         "matcher": "Skill",
         "hooks": [
           {

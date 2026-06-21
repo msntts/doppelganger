@@ -60,6 +60,26 @@ fi
 MSYS=winsymlinks:nativestrict ln -s "$SCRIPT_DIR/skills" "$CLAUDE_DIR/skills"
 echo "  skills/ のシンボリックリンクを作成しました"
 
+# --- rules/ ---
+if [ -L "$CLAUDE_DIR/rules" ]; then
+  rm "$CLAUDE_DIR/rules"
+elif [ -d "$CLAUDE_DIR/rules" ]; then
+  mv "$CLAUDE_DIR/rules" "$CLAUDE_DIR/rules.bak"
+  echo "  既存の rules/ を rules.bak/ にバックアップしました"
+fi
+MSYS=winsymlinks:nativestrict ln -s "$SCRIPT_DIR/rules" "$CLAUDE_DIR/rules"
+echo "  rules/ のシンボリックリンクを作成しました"
+
+# --- agents/ ---
+if [ -L "$CLAUDE_DIR/agents" ]; then
+  rm "$CLAUDE_DIR/agents"
+elif [ -d "$CLAUDE_DIR/agents" ]; then
+  mv "$CLAUDE_DIR/agents" "$CLAUDE_DIR/agents.bak"
+  echo "  既存の agents/ を agents.bak/ にバックアップしました"
+fi
+MSYS=winsymlinks:nativestrict ln -s "$SCRIPT_DIR/agents" "$CLAUDE_DIR/agents"
+echo "  agents/ のシンボリックリンクを作成しました"
+
 # --- settings.json のマージ ---
 # settings.json はシンボリックリンクにしない。
 # doppelganger/settings.json の hooks・permissions・model・extraKnownMarketplaces・advisorModel を
