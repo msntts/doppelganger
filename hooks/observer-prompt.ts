@@ -24,7 +24,7 @@ const REJECTION_RE =
   /却下|やり直し|やりなおし|なおして|直して|違う|だめ|NG|使えない|別の/i;
 const MODIFICATION_RE = /でも|ただし|修正|変えて|追加して|ただ(?!し)|一方で/;
 const APPROVAL_RE =
-  /OK|ok|了解|承認|進めて?|進め|すすめ|続けて?|続け|問題ない|大丈夫|いいです|そうです|はい|お願いします?|おねがい|コミットして|pushして|push して/;
+  /OK|ok|了解|承認|進めて?|進め|すすめ|続けて?|続け|問題ない|大丈夫|いいです|そうです|はい|お願いします?|おねがい|コミットして|pushして|push\s+して|わかった|わかりました|LGTM|了承|それで|お願い/;
 
 const SELECTION_MAP: Record<string, ResponseType> = {
   "1": "approval",
@@ -38,7 +38,7 @@ function classifyResponse(text: string): ResponseType {
   if (SELECTION_MAP[trimmed]) return SELECTION_MAP[trimmed];
   if (REJECTION_RE.test(text)) return "rejection";
   if (MODIFICATION_RE.test(text)) return "modification";
-  if (text.length <= 30 && APPROVAL_RE.test(text)) return "approval";
+  if (text.length <= 50 && APPROVAL_RE.test(text)) return "approval";
   return "unclear";
 }
 
@@ -75,21 +75,15 @@ async function main(): Promise<void> {
     // 1. CLASSIFY using events read BEFORE this turn's append
     const events = readEvents(sessionId);
     const preceding = findPrecedingSkill(events, now);
-    const humanAttribution: "autonomous" | "post_ai" = preceding
-      ? "post_ai"
-      : "autonomous";
 
-    let responseType = preceding ? classifyResponse(prompt) : undefined;
+    // スラッシュコマンドは新タスク起動 — 直前スキルへの応答ではなく autonomous 扱い
+    const isNewSkillInvocation = /^\/[a-zA-Z]/.test(prompt.trim());
 
-    // review 後の短い承認フレーズ（20文字未満・疑問符なし）を unclear から approval に補正
-    if (
-      responseType === "unclear" &&
-      preceding?.skill === "review" &&
-      prompt.length < 20 &&
-      !prompt.trimEnd().endsWith("？")
-    ) {
-      responseType = "approval";
-    }
+    const humanAttribution: "autonomous" | "post_ai" =
+      preceding && !isNewSkillInvocation ? "post_ai" : "autonomous";
+
+    const responseType =
+      preceding && !isNewSkillInvocation ? classifyResponse(prompt) : undefined;
 
     // 2. Append user_response
     const userEvent: Omit<import("./event-log.ts").UserResponseEvent, "ts"> = {
@@ -100,7 +94,7 @@ async function main(): Promise<void> {
       prompt_len: prompt.length,
       cwd,
     };
-    if (preceding) {
+    if (preceding && !isNewSkillInvocation) {
       userEvent.response_type = responseType;
       userEvent.preceding_skill = preceding.skill;
       userEvent.ai_elapsed_sec = preceding.elapsedSec;
@@ -129,7 +123,7 @@ async function main(): Promise<void> {
       human_attribution: humanAttribution,
       cwd,
     };
-    if (preceding) {
+    if (preceding && !isNewSkillInvocation) {
       archiveEntry.response_type = responseType;
       archiveEntry.preceding_skill = preceding.skill;
       archiveEntry.preceding_skill_ts = preceding.ts;
