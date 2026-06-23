@@ -8,7 +8,7 @@
  *   0.2  per-project allow patterns → 即 allow
  *   0.3  debug/* ブランチ → 全操作を即 allow
  *   1.   readonly_tools.json に登録済み → 即 allow
- *   2.   それ以外 → allow（LLM 判定は /gatekeeper スキルが Claude 側で担う）
+ *   2.   それ以外 → 何も返さず exit 0（ネイティブ確認ダイアログに委ねる）
  *
  * PermissionRequest イベントでも同じ判定ロジックを使い、ネイティブ確認ダイアログを抑制する。
  *
@@ -390,17 +390,14 @@ async function main(): Promise<void> {
     return;
   }
 
-  // 2. それ以外 → allow（LLM 判定は Claude 側の /gatekeeper スキルが担う）
-  const reason = "静的ルール対象外 → allow";
+  // 2. それ以外 → hookSpecificOutput を返さず exit 0（ネイティブ確認ダイアログに委ねる）
   writeLog({
     ...baseLog,
     decision: "allow",
-    reason,
+    reason: "静的ルール対象外 → ネイティブ確認ダイアログに委ねる",
     latency_ms: 0,
   });
-  if (eventName === "PermissionRequest")
-    logObserverEvent(sessionId, toolName, summary, "allow");
-  allow(reason, eventName);
+  process.exit(0);
 }
 
 main().catch((err: Error) => {
