@@ -9,7 +9,7 @@ description: 承認ルールをプロジェクトの .claude/allow_patterns.json
 `.claude/readonly_tools.json`（ツール名）に許可エントリを追記し、
 以降の gatekeeper 静的チェックで同種操作が即 allow されるようにする。
 
-gatekeeper.ts は LLM を呼ばない。Bash パターンとツール名を JSON で管理する。
+gatekeeper.ts（静的ルール層）は LLM を呼ばない。Bash パターンとツール名を JSON で管理する。
 
 ---
 

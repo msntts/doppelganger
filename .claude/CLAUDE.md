@@ -31,12 +31,11 @@ doppelganger/
 │   ├── analyze-observer/  # observer ログ統合分析スキル
 │   ├── execute/       # PLAN.md ベースの構造化実行スキル
 │   ├── filetree/      # broot ファイルツリー表示スキル
-│   ├── gatekeeper/    # ツール実行前の安全性自己評価スキル
 │   ├── investigate/   # デバッグ調査スキル
 │   ├── review/        # Security・DevOps レビュースキル
 │   └── tune/          # allow/deny パターン学習スキル
 ├── hooks/             # フックスクリプト（~/.claude/hooks/ の実体）
-│   ├── gatekeeper.ts        # PreToolUse/PermissionRequest: 静的ルールで allow/block 判定
+│   ├── gatekeeper.ts        # PreToolUse: 静的ルールで allow/block 判定（PermissionRequest は type:prompt/Haiku に委譲）
 │   ├── check-rm-safety.ts   # PreToolUse(Bash): rm コマンドの安全チェック
 │   ├── work-logger.ts       # PostToolUse: 作業ログ記録
 │   ├── observer-prompt.ts   # UserPromptSubmit: 判断帰属の分析・記録

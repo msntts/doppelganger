@@ -8,18 +8,23 @@
 
 ## アーキテクチャ概要
 
-gatekeeper は **静的ルールのみ** で allow / block を決定する TypeScript フック。
-LLM 判定は行わない。リスク評価は Claude 側の `/gatekeeper` スキルが担う。
+承認フローは **2層構成**。gatekeeper.ts が静的判定し、決着しなかったものを PermissionRequest の type: "prompt" hook (Haiku) が LLM 判定する。
 
 ```
-PreToolUse / PermissionRequest → gatekeeper.ts (静的ルール) → allow / block
-                                  ↑ LLM は呼ばない
-リスク評価が必要なとき → /gatekeeper スキル (Claude 側) → ask / allow
+PreToolUse → gatekeeper.ts (静的ルール) → allow / block
+                     ↓ 決着しない場合は exit 0 で素通り
+             PermissionRequest → type: "prompt" hook (Haiku, LLM) → yes / no
 ```
+
+優先順位: `permissions.allow` > `gatekeeper.ts` (PreToolUse) > type: "prompt" (PermissionRequest)
+
+`/gatekeeper` スキルは廃止済み。
 
 ---
 
 ## 判定フロー
+
+### Layer 1: gatekeeper.ts (PreToolUse, 静的ルール)
 
 ```
 0.   denied_patterns（ALWAYS_DENY）→ 即ブロック
@@ -27,8 +32,12 @@ PreToolUse / PermissionRequest → gatekeeper.ts (静的ルール) → allow / b
 0.2  per-project allow_patterns.json → 即 allow（Bash パターン単位）
 0.3  debug/* ブランチ              → 全操作を即 allow
 1.   readonly_tools.json 登録済み  → 即 allow（ツール名単位）
-2.   それ以外                      → allow（/gatekeeper スキルが Claude 側で評価）
+2.   それ以外                      → exit 0（hookSpecificOutput を返さず PermissionRequest へ）
 ```
+
+### Layer 2: PermissionRequest (type: "prompt", Haiku)
+
+静的ルールで決着しなかった操作のみ発火する。Haiku が yes/no を判定し、判断できない場合は fail-open（許可）にする。
 
 ---
 

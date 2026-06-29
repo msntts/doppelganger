@@ -112,16 +112,16 @@
 
 `/execute` スキル経由かどうか、変更規模の大小に関わらず適用する。
 
-### Gatekeeper（自律判断）
+### Gatekeeper（承認フロー）
 
-`gatekeeper.ts` hook は静的ルール（denied_patterns / allow_patterns / readonly_tools / git 操作）のみを処理し、それ以外は全 allow する。LLM 判断は行わない。
+承認フローは2層構成で自動処理される：
 
-リスクのある操作を実行する前に、自発的に `/gatekeeper` スキルを呼んで安全性を評価する。
-gatekeeper スキルの verdict に応じて:
+1. **gatekeeper.ts (PreToolUse, 静的ルール)** — denied_patterns → 安全な git → allow_patterns → debug/* → readonly_tools の順で判定。決着しなければ何も返さず exit 0 して次層へ素通り。LLM は呼ばない。
+2. **type: "prompt" hook (PermissionRequest, Haiku)** — 静的で決着しなかったものを Haiku が yes/no 判定。不明なら fail-open（許可）。
 
-- **allow**（無出力）→ 即座に同一ターン内で元の処理を続行する。ユーザー入力を待たない。
-- **ask** → 指摘内容をユーザーに伝えて確認を取る。
-- **block** → 実行しない。
+優先順位: `permissions.allow` > `gatekeeper.ts` (PreToolUse) > type: "prompt" (PermissionRequest)
+
+`/gatekeeper` スキルは廃止済み。Claude 自身が自発的にスキルを呼ぶ必要はない。
 
 ### Tune（承認ルールのチューニング）
 
