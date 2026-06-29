@@ -318,5 +318,5 @@ main().catch((err: Error) => {
     latency_ms: 0,
   });
   process.stderr.write(`[gatekeeper] error: ${err.message}\n`);
-  allow(`gatekeeper error (fail-open): ${err.message}`);
+  process.exit(0);
 });
