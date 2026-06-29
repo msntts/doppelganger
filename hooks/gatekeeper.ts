@@ -40,7 +40,7 @@ interface LogEntry {
   session_id: string;
   tool: string;
   input_summary: string;
-  decision: "allow" | "block" | "error";
+  decision: "allow" | "block" | "delegated" | "error";
   reason?: string;
   latency_ms: number;
 }
@@ -301,7 +301,7 @@ async function main(): Promise<void> {
   //    PermissionRequest が発火し、type: "prompt" hook が LLM 判定する。
   writeLog({
     ...baseLog,
-    decision: "allow",
+    decision: "delegated",
     reason: "静的ルール対象外 → PermissionRequest/type:prompt に委譲",
     latency_ms: 0,
   });
