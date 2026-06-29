@@ -17,5 +17,6 @@ if [ ! -f "$DST" ]; then
   printf '{}' > "$DST"
 fi
 
+cp "$DST" "$DST.bak"
 jq -s '.[0] * .[1]' "$DST" "$SRC" > "$DST.tmp" && mv "$DST.tmp" "$DST"
 echo "settings.json を同期しました: $SRC -> $DST"
