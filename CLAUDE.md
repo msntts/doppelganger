@@ -117,7 +117,7 @@
 承認フローは2層構成で自動処理される：
 
 1. **gatekeeper.ts (PreToolUse, 静的ルール)** — denied_patterns → 安全な git → allow_patterns → debug/* → readonly_tools の順で判定。決着しなければ何も返さず exit 0 して次層へ素通り。LLM は呼ばない。
-2. **type: "prompt" hook (PermissionRequest, Haiku)** — 静的で決着しなかったものを Haiku が yes/no 判定。不明なら fail-open（許可）。
+2. **type: "prompt" hook (PermissionRequest, Haiku)** — 静的で決着しなかったものを Haiku が yes/no 判定。Haiku も失敗・タイムアウトした場合は Claude Code がユーザーに承認を求める（機能安全）。
 
 優先順位: `permissions.allow` > `gatekeeper.ts` (PreToolUse) > type: "prompt" (PermissionRequest)
 
