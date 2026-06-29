@@ -1,6 +1,7 @@
 #!/usr/bin/env tsx
 /**
- * PreToolUse / PermissionRequest hook — 静的ガードのみ。LLM 判定は /gatekeeper スキルに委譲。
+ * PreToolUse hook — 静的ガードのみ（deny + nuanced allow）。
+ * PermissionRequest は settings.json の type: "prompt" hook に委譲。
  *
  * 判定フロー:
  *   0.   denied_patterns（ALWAYS_DENY）→ 即ブロック
@@ -8,9 +9,7 @@
  *   0.2  per-project allow patterns → 即 allow
  *   0.3  debug/* ブランチ → 全操作を即 allow
  *   1.   readonly_tools.json に登録済み → 即 allow
- *   2.   それ以外 → 何も返さず exit 0（ネイティブ確認ダイアログに委ねる）
- *
- * PermissionRequest イベントでも同じ判定ロジックを使い、ネイティブ確認ダイアログを抑制する。
+ *   2.   それ以外 → 何も返さず exit 0（PermissionRequest → type: "prompt" へ）
  *
  * エラー時はフック自体の障害でユーザー操作を止めないよう exit 0 にフォールバックする。
  */
@@ -25,15 +24,12 @@ import {
 } from "fs";
 import { homedir } from "os";
 import { isAbsolute, join } from "path";
-import { appendArchive } from "./archive-log.ts";
-import { readEvents } from "./event-log.ts";
 import { readHookInput } from "./hook-io.ts";
 
 const LOG_PATH = join(homedir(), ".claude", "gatekeeper-log.jsonl");
 const LOG_MAX_BYTES = 10 * 1024 * 1024; // 10MB
 
 interface HookInput {
-  hook_event_name?: string;
   tool_name: string;
   tool_input: Record<string, unknown>;
   session_id?: string;
@@ -82,50 +78,6 @@ function writeLog(entry: LogEntry): void {
     );
   } catch {
     // ログ失敗はサイレントに無視
-  }
-}
-
-// Mask common secret patterns before writing to persistent observer-log.jsonl
-const SECRET_PATTERN =
-  /((?:KEY|SECRET|TOKEN|PASSWORD|BEARER)\s*=\s*|Bearer\s+)([^\s'"&;|]{4,})/gi;
-
-function maskSecrets(text: string): string {
-  return text.replace(SECRET_PATTERN, (_m, prefix) => `${prefix}***`);
-}
-
-function hasGatekeeperSkill(sessionId: string): boolean {
-  if (!sessionId) return false;
-  try {
-    const events = readEvents(sessionId);
-    for (let i = events.length - 1; i >= 0; i--) {
-      const ev = events[i];
-      if (ev.kind === "user_response") return false;
-      if (ev.kind === "skill_start" && ev.skill === "gatekeeper") return true;
-    }
-  } catch {
-    // fail-open
-  }
-  return false;
-}
-
-function logObserverEvent(
-  sessionId: string,
-  toolName: string,
-  commandPreview: string,
-  verdict: "allow" | "block",
-): void {
-  try {
-    appendArchive({
-      event_type: "permission_request",
-      session_id: sessionId,
-      timestamp: new Date().toISOString().slice(0, 19),
-      tool_name: toolName,
-      command_preview: maskSecrets(commandPreview).slice(0, 100),
-      verdict,
-      skill_preceded: hasGatekeeperSkill(sessionId),
-    });
-  } catch {
-    // fail-open: ログ失敗でツール実行を止めない
   }
 }
 
@@ -243,49 +195,34 @@ function loadReadonlyTools(cwd?: string): Set<string> {
   }
 }
 
-function allow(
-  reason: string,
-  eventName = "PreToolUse",
-  additionalContext?: string,
-): void {
-  const hookOutput: Record<string, unknown> =
-    eventName === "PermissionRequest"
-      ? { hookEventName: "PermissionRequest", decision: { behavior: "allow" } }
-      : {
-          hookEventName: "PreToolUse",
-          permissionDecision: "allow",
-          permissionDecisionReason: reason,
-        };
-  if (additionalContext) hookOutput.additionalContext = additionalContext;
+function allow(reason: string): void {
   process.stdout.write(
-    JSON.stringify({ hookSpecificOutput: hookOutput }) + "\n",
+    JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        permissionDecision: "allow",
+        permissionDecisionReason: reason,
+      },
+    }) + "\n",
   );
   process.exit(0);
 }
 
-function block(
-  reason: string,
-  eventName = "PreToolUse",
-  additionalContext?: string,
-): void {
-  const hookOutput: Record<string, unknown> =
-    eventName === "PermissionRequest"
-      ? { hookEventName: "PermissionRequest", decision: { behavior: "deny" } }
-      : {
-          hookEventName: "PreToolUse",
-          permissionDecision: "deny",
-          permissionDecisionReason: reason,
-        };
-  if (additionalContext) hookOutput.additionalContext = additionalContext;
+function block(reason: string): void {
   process.stdout.write(
-    JSON.stringify({ hookSpecificOutput: hookOutput }) + "\n",
+    JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        permissionDecision: "deny",
+        permissionDecisionReason: reason,
+      },
+    }) + "\n",
   );
   process.exit(0);
 }
 
 async function main(): Promise<void> {
   const data: HookInput = await readHookInput<HookInput>();
-  const eventName = data.hook_event_name ?? "PreToolUse";
   const toolName = data.tool_name;
   const toolInput = data.tool_input ?? {};
   const summary = inputSummary(toolName, toolInput);
@@ -309,9 +246,7 @@ async function main(): Promise<void> {
       reason: deniedReason,
       latency_ms: 0,
     });
-    if (eventName === "PermissionRequest")
-      logObserverEvent(sessionId, toolName, summary, "block");
-    block(deniedReason, eventName);
+    block(deniedReason);
     return;
   }
 
@@ -323,15 +258,8 @@ async function main(): Promise<void> {
       !/--no-verify\b|--amend\b/.test(cmd)
     ) {
       const reason = "git add/commit (ローカル・--no-verify なし) → 自動承認";
-      writeLog({
-        ...baseLog,
-        decision: "allow",
-        reason,
-        latency_ms: 0,
-      });
-      if (eventName === "PermissionRequest")
-        logObserverEvent(sessionId, toolName, summary, "allow");
-      allow(reason, eventName);
+      writeLog({ ...baseLog, decision: "allow", reason, latency_ms: 0 });
+      allow(reason);
       return;
     }
   }
@@ -346,15 +274,8 @@ async function main(): Promise<void> {
     });
     if (matchedPattern) {
       const reason = `allow_patterns match: "${matchedPattern}" → 自動承認`;
-      writeLog({
-        ...baseLog,
-        decision: "allow",
-        reason,
-        latency_ms: 0,
-      });
-      if (eventName === "PermissionRequest")
-        logObserverEvent(sessionId, toolName, summary, "allow");
-      allow(reason, eventName);
+      writeLog({ ...baseLog, decision: "allow", reason, latency_ms: 0 });
+      allow(reason);
       return;
     }
   }
@@ -363,38 +284,25 @@ async function main(): Promise<void> {
   const branch = currentBranch();
   if (branch?.startsWith("debug/")) {
     const reason = `debug/* ブランチのため自動承認 (branch: ${branch})`;
-    writeLog({
-      ...baseLog,
-      decision: "allow",
-      reason,
-      latency_ms: 0,
-    });
-    if (eventName === "PermissionRequest")
-      logObserverEvent(sessionId, toolName, summary, "allow");
-    allow(reason, eventName);
+    writeLog({ ...baseLog, decision: "allow", reason, latency_ms: 0 });
+    allow(reason);
     return;
   }
 
   // 1. readonly_tools（ツール名単位の静的 allow リスト）
   if (loadReadonlyTools(data.cwd).has(toolName)) {
     const reason = `${toolName}: readonly_tools に登録済みのため自動承認`;
-    writeLog({
-      ...baseLog,
-      decision: "allow",
-      reason,
-      latency_ms: 0,
-    });
-    if (eventName === "PermissionRequest")
-      logObserverEvent(sessionId, toolName, summary, "allow");
-    allow(reason, eventName);
+    writeLog({ ...baseLog, decision: "allow", reason, latency_ms: 0 });
+    allow(reason);
     return;
   }
 
-  // 2. それ以外 → hookSpecificOutput を返さず exit 0（ネイティブ確認ダイアログに委ねる）
+  // 2. それ以外 → hookSpecificOutput を返さず exit 0
+  //    PermissionRequest が発火し、type: "prompt" hook が LLM 判定する。
   writeLog({
     ...baseLog,
     decision: "allow",
-    reason: "静的ルール対象外 → ネイティブ確認ダイアログに委ねる",
+    reason: "静的ルール対象外 → PermissionRequest/type:prompt に委譲",
     latency_ms: 0,
   });
   process.exit(0);
@@ -410,5 +318,5 @@ main().catch((err: Error) => {
     latency_ms: 0,
   });
   process.stderr.write(`[gatekeeper] error: ${err.message}\n`);
-  allow(`gatekeeper error (fail-open): ${err.message}`, "PreToolUse");
+  allow(`gatekeeper error (fail-open): ${err.message}`);
 });
