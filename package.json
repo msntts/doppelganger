@@ -1,6 +1,9 @@
 {
   "name": "doppelganger",
   "private": true,
+  "scripts": {
+    "sync:settings": "bash sync-settings.sh"
+  },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "prettier": "^3.8.3",
