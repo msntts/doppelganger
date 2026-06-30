@@ -36,18 +36,6 @@
         ]
       }
     ],
-    "PermissionRequest": [
-      {
-        "hooks": [
-          {
-            "type": "prompt",
-            "prompt": "You are a security gatekeeper for a developer's local machine. Respond with ONLY \"yes\" or \"no\" — no explanation, no punctuation.\n\nCore principle: allow operations that can be undone; deny operations that cannot. Use reversibility as your lens, not surface appearance. A file deletion is safe if the file is committed in git (git can restore it). A lost uncommitted change is not.\n\nRespond \"no\" only for irreversible or safety-bypassing operations:\n- Deleting files or directories outside git control (no recovery path)\n- Discarding uncommitted changes (git reset --hard, git checkout -- <file>)\n- git push --force or -f  (--force-with-lease is reversible → \"yes\")\n- git commit --no-verify or git push --no-verify\n- DROP TABLE, DROP DATABASE, TRUNCATE on any database\n- Direct destructive operations on production systems or production databases\n- Writing to credential/auth directories: ~/.ssh/, ~/.aws/, ~/.gnupg/, ~/.config/gcloud/, etc.\n- Writing to OS system directories: /etc/, /usr/, /bin/, /sbin/, /boot/, etc.\n\nRespond \"yes\" for everything else: file reads, file edits in project dirs, builds, tests, linting, package installs, normal git operations (fetch/pull/push/commit/merge/stash), skill invocations, MCP tool calls, process management, CI/CD deployments. When the operation seems reversible or destruction is unlikely: \"yes\".\n\nTool call:\n$ARGUMENTS",
-            "model": "claude-haiku-4-5-20251001",
-            "timeout": 30
-          }
-        ]
-      }
-    ],
     "PreToolUse": [
       {
         "hooks": [

@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 /**
  * PreToolUse hook — 静的ガードのみ（deny + nuanced allow）。
- * PermissionRequest は settings.json の type: "prompt" hook に委譲。
+ * 静的ルールで決着しなかった操作は PermissionRequest（ダイアログ）に委譲。
  *
  * 判定フロー:
  *   0.   denied_patterns（ALWAYS_DENY）→ 即ブロック
@@ -9,7 +9,7 @@
  *   0.2  per-project allow patterns → 即 allow
  *   0.3  debug/* ブランチ → 全操作を即 allow
  *   1.   readonly_tools.json に登録済み → 即 allow
- *   2.   それ以外 → 何も返さず exit 0（PermissionRequest → type: "prompt" へ）
+ *   2.   それ以外 → 何も返さず exit 0（PermissionRequest ダイアログへ）
  *
  * エラー時はフック自体の障害でユーザー操作を止めないよう exit 0 にフォールバックする。
  */
@@ -298,11 +298,11 @@ async function main(): Promise<void> {
   }
 
   // 2. それ以外 → hookSpecificOutput を返さず exit 0
-  //    PermissionRequest が発火し、type: "prompt" hook が LLM 判定する。
+  //    PermissionRequest が発火し、ダイアログでユーザー承認を求める。
   writeLog({
     ...baseLog,
     decision: "delegated",
-    reason: "静的ルール対象外 → PermissionRequest/type:prompt に委譲",
+    reason: "静的ルール対象外 → PermissionRequest ダイアログに委譲",
     latency_ms: 0,
   });
   process.exit(0);

@@ -35,7 +35,7 @@ doppelganger/
 │   ├── review/        # Security・DevOps レビュースキル
 │   └── tune/          # allow/deny パターン学習スキル
 ├── hooks/             # フックスクリプト（~/.claude/hooks/ の実体）
-│   ├── gatekeeper.ts        # PreToolUse: 静的ルールで allow/block 判定（PermissionRequest は type:prompt/Haiku に委譲）
+│   ├── gatekeeper.ts        # PreToolUse: 静的ルールで allow/block 判定（決着しなければ PermissionRequest ダイアログに委譲）
 │   ├── check-rm-safety.ts   # PreToolUse(Bash): rm コマンドの安全チェック
 │   ├── work-logger.ts       # PostToolUse: 作業ログ記録
 │   ├── observer-prompt.ts   # UserPromptSubmit: 判断帰属の分析・記録
