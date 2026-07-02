@@ -27,24 +27,30 @@ interface StatusLineInput {
 }
 
 function gitSegment(cwd: string): string | null {
-  const opts = { cwd, stdio: ["pipe", "pipe", "ignore"] as const };
+  const opts = {
+    cwd,
+    stdio: ["pipe", "pipe", "ignore"] as const,
+    timeout: 1000,
+  };
   try {
     execSync("git rev-parse --git-dir", opts);
+    const branch = execSync("git branch --show-current", opts)
+      .toString()
+      .trim();
+    const staged = execSync("git diff --cached --numstat", opts)
+      .toString()
+      .trim();
+    const modified = execSync("git diff --numstat", opts).toString().trim();
+    const stagedCount = staged ? staged.split("\n").length : 0;
+    const modifiedCount = modified ? modified.split("\n").length : 0;
+
+    let status = "";
+    if (stagedCount > 0) status += `${GREEN}+${stagedCount}${RESET}`;
+    if (modifiedCount > 0) status += `${YELLOW}~${modifiedCount}${RESET}`;
+    return status ? `${branch} ${status}` : branch;
   } catch {
     return null;
   }
-  const branch = execSync("git branch --show-current", opts).toString().trim();
-  const staged = execSync("git diff --cached --numstat", opts)
-    .toString()
-    .trim();
-  const modified = execSync("git diff --numstat", opts).toString().trim();
-  const stagedCount = staged ? staged.split("\n").length : 0;
-  const modifiedCount = modified ? modified.split("\n").length : 0;
-
-  let status = "";
-  if (stagedCount > 0) status += `${GREEN}+${stagedCount}${RESET}`;
-  if (modifiedCount > 0) status += `${YELLOW}~${modifiedCount}${RESET}`;
-  return status ? `${branch} ${status}` : branch;
 }
 
 function contextColor(pct: number): string {
